@@ -26,3 +26,4 @@ setuptools.setup(
         "google-genai>=2.0.0",
     ],
 )
+

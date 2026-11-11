@@ -17,3 +17,4 @@ dependencies = [
     "pymdown-extensions>=10.7",
     "google-genai>=2.0.0"
 ]
+
