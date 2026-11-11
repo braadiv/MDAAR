@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mdaar"
-version = "1.0.0"
-description = "Multi-role Dynamic Architecture for Automated Repositories (AI-Driven Software Documentation Framework)"
+version = "2.0.0"
+description = "Multi-role Dynamic Architecture for Automated Repositories (Polyglot AI Documentation & Hybrid RAG Framework)"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
@@ -25,3 +25,12 @@ local = [
     "bitsandbytes>=0.43.0"
 ]
 
+[tool.setuptools]
+py-modules = ["mdaar_pipeline"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+mdaar = ["skills/*/*.md"]

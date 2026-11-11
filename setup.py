@@ -5,14 +5,19 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="mdaar",
-    version="1.0.0",
+    version="2.0.0",
     author="MDAAR Community",
     author_email="mdaar@example.com",
-    description="Multi-role Dynamic Architecture for Automated Repositories (AI-Driven Software Documentation Framework)",
+    description="Multi-role Dynamic Architecture for Automated Repositories (Polyglot AI Documentation & Hybrid RAG Framework)",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/braadiv/MDAAR",
+    packages=setuptools.find_packages(exclude=["tests", "tests.*"]),
     py_modules=["mdaar_pipeline"],
+    include_package_data=True,
+    package_data={
+        "mdaar": ["skills/*/*.md"],
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
@@ -33,4 +38,3 @@ setuptools.setup(
         ],
     },
 )
-

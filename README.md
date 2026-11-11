@@ -21,26 +21,24 @@ Designed to run completely on **Google Colab** (preserving local hardware resour
 
 ---
 
-## 🌟 الرؤية المعمارية للمنظومة
+## 🌟 الرؤية المعمارية للمنظومة (v2.0.0)
 
-1. **مجانية 100% وبدون اشتراكات سحابية إضافية:**
-   - تعمل كافة المعالجات الثقيلة وتوليد الوثائق على **Google Colab**، مما يوفر كامل موارد المعالج والذاكرة لجهازك المحلي.
-   - دعم **Google Gemini API** المجاني مع خاصية **تدوير المفاتيح التلقائي (Key Rotation)**.
-   - دعم كامل لتشغيل نماذج مفتوحة المصدر **أوفلاين 100%** داخل كولاب (`Qwen2.5-Coder`, `Gemma-2`) للخصوصية المطلقة.
-2. **استدامة البيانات والحالة عبر Google Drive:**
-   - حفظ تلقائي للمفاتيح، إعدادات المشروع، وتتبع آخر Commit في ملفات `.config.json` و `.state.json` في Google Drive لمنع فقدان البيانات بين جلسات كولاب.
-3. **مفاتيح SSH مزدوجة ومستقلة تماماً:**
-   - مفتاح Deploy Key خاص بمستودع الكود (`id_ed25519_source`).
-   - مفتاح Deploy Key مستقل تماماً لمستودع التوثيق الخارجي (`id_ed25519_docs`).
-4. **محللات متخصصة للمخططات وقواعد البيانات (Schema & Route Parsers):**
-   - تحويل ملفات SQL DDL تلقائياً إلى مخططات **Mermaid ERD** حقيقية.
-   - استخراج مسارات الكود ونقاط الاتصال إلى جدول منظم في **API Reference**.
-5. **التوثيق الحي المستمر (Living Documentation):**
-   - تتبع فروقات الكود عبر `git diff` وتحليل أثر التغيير (`ImpactAnalyzer`) لتحديث الوثائق المتأثرة فقط.
-6. **مساعد معرفي ذكي تفاعلي (Interactive AI Q&A / RAG):**
-   - استجواب الوثائق باللغة الطبيعية مباشرة داخل كولاب مع ذكر أسماء ملفات المصادر المستشهد بها مجاناً بالكامل.
-7. **بوابة توثيق تفاعلية فورية (MkDocs Material + Cloudflare Tunnel):**
-   - موقع تفاعلي يدعم اللغة العربية والوضع الليلي ومخططات Mermaid وبث مباشر عبر رابط إنترنت آمن.
+1. **قراءة 100% من ملفات المشروع بدون حدود للسياق:**
+   - فحص شامل لجميع ملفات الكود غير المستثناة عبر نمط **Map-Reduce** (`RepoScanner` + `SemanticFileChunker` + `MapperAgent`) مع تجاهل تلقائي لمجلدات `vendor`, `node_modules`, `.git`, `.gitignore` وتعقيم الأسرار عبر `SecretSanitizer`.
+2. **معمارية النموذج المزدوج الهجينة (Planner + Executor):**
+   - **إعدادات مودل الخطة (`planner_gateway`):** يصمم الخطة الهندسية الشاملة ويراجع الجودة والاتساق (`QualityAgent`).
+   - **إعدادات مودل التنفيذ (`executor_gateway`):** يتولى دائماً فحص 100% من الملفات (`Map Pass`) وكتابة جميع حزم التوثيق التفصيلية والإجابة عبر RAG (مع خيار تشغيل نموذج واحد لكليهما، وإدارة تفريغ الـ VRAM تلقائياً عند اختيار نموذجين محليين على Colab T4).
+3. **مهارات مدمجة لمنع الهلوسة داخل المستودع:**
+   - تتثبت حزمة المهارات تلقائياً مع المكتبة (`core-grounding-qa`, `reverse-engineering`, `architecture-mermaid`, `api-openapi-spec`, `docs-technical-writer`, `ops-and-user-guides`, `rag-qa-grounding`) وتفرض بروتوكول `[TBD]` و `[⚠️ BLIND SPOT]`.
+4. **محللات حتمية متعددة اللغات والأطر (`Polyglot Extractors`):**
+   - استخراج الحقائق من PHP (Yii2, Laravel, Symfony)، Python (AST)، JS/TS، Java/Kotlin، C#/.NET، Go، Ruby، Rust، Dart/Flutter.
+   - استخلاص قواعد البيانات (`SchemaParser`) من ملفات SQL DDL وهجرات Yii2/Laravel/Prisma إلى مخططات `Mermaid ERD` و`Data-Dictionary.md`.
+   - استخلاص نقاط الاتصال (`APISpecParser`) من `Postman Collections` و`OpenAPI/Swagger` ومسارات `Yii2 urlManager/ActiveController/actionXxx` وFastAPI/Django/Laravel/Express/Spring/Go.
+5. **محرك Hybrid RAG دائم في `.rag_index/` + بوابة جودة آلية:**
+   - يفهرس الوثائق وحقائق الكود الحقيقية والجداول والـ APIs مع تطبيع العربية وتخصيص الجمهور (`Developer`, `Management`, `End-User`).
+   - تدقيق تلقائي لمخططات Mermaid والاتساق وتحديث `Document-Register.md` (`L0` ➔ `L1`) و`Quality-Audit-Report.md`.
+6. **بوابة توثيق تفاعلية فورية (MkDocs Material + Cloudflare Tunnel):**
+   - موقع تفاعلي يدعم اللغة العربية والوضع الليلي ومخططات Mermaid ومفاتيح SSH مزدوجة مستقلة (`id_ed25519_source` & `id_ed25519_docs`).
 
 ---
 
@@ -83,40 +81,38 @@ pip install -U transformers accelerate bitsandbytes
 ```python
 from mdaar_pipeline import MDAARPipeline, ModelGateway
 
-# 1. إعداد بوابة الذكاء الاصطناعي:
-# خيار أ: Google Gemini API (مع تدوير المفاتيح)
-gateway = ModelGateway(
+# 1. إعداد بوابة الخطة (مثلاً Gemini) وبوابة التنفيذ والفحص (مثلاً Qwen2.5-Coder أوفلاين 4-bit)
+planner_gateway = ModelGateway(
     provider="Gemini",
     model_name="gemini-2.5-flash",
     api_keys=["KEY_1", "KEY_2"]
 )
 
-# خيار ب: نموذج محلي قوي بتكميم 4-bit NF4 (كارت T4 على Colab)
-# نماذج مدعومة: Qwen/Qwen2.5-Coder-7B-Instruct, meta-llama/Meta-Llama-3.1-8B-Instruct, mistralai/Mistral-7B-Instruct-v0.3, google/gemma-2-9b-it
-gateway_local = ModelGateway(
+executor_gateway = ModelGateway(
     provider="Local-Offline",
     local_model_path="Qwen/Qwen2.5-Coder-7B-Instruct",
-    quantization="4bit", # يستهلك فقط ~5.5GB من VRAM
-    hf_token="YOUR_HF_TOKEN" # مطلوب فقط للموديلات المقيدة (Llama, Mistral, Gemma)
+    quantization="4bit", # يستهلك فقط ~5.5GB من VRAM على كارت T4
 )
 
-# 2. تهيئة خط الإنتاج
+# 2. تهيئة خط الإنتاج المزدوج
 pipeline = MDAARPipeline(
     project_name="ECommerceApp",
     git_source_url="https://github.com/myorg/ecommerce.git",
     git_docs_url="git@github.com:myorg/central-docs.git",
     source_auth="HTTPS",
     docs_auth="SSH",
-    gateway=gateway
+    planner_gateway=planner_gateway,
+    executor_gateway=executor_gateway,
 )
 
-# 3. تشغيل استخلاص المخططات وبناء الهيكل
-pipeline.init_framework_structure()
-pipeline.extract_and_generate_specialized()
+# 3. مزامنة وتشغيل الفحص الكامل 100% + الخطة + التوليد + بوابة الجودة + فهرس RAG
+current_commit, changed = pipeline.sync_source_repo()
+stats = pipeline.run_multi_agent_generation()
+print("Run Summary:", stats)
 
-# 4. إطلاق البوابة التفاعلية
-tunnel_url = pipeline.serve_and_tunnel()
-print("Portal URL:", tunnel_url)
+# 4. سؤال فهرس RAG الدائم في project_dir/.rag_index/
+answer = pipeline.get_chat_engine().ask("ما هي الجداول ونقاط الـ API الرئيسية؟", audience="Developer")
+print(answer)
 ```
 
 ---
@@ -136,8 +132,9 @@ print("Portal URL:", tunnel_url)
 
 ```text
 /MyDrive/AI_Documentation_Workspace/<ProjectName>/
-├── .config.json        # إعدادات المشروع وروابط Git والمفاتيح
+├── .config.json        # إعدادات المشروع وروابط Git
 ├── .state.json         # تتبع آخر Commit وتاريخ آخر تحديث
+├── .rag_index/         # فهرس Hybrid BM25 RAG + بطاقات الكود + master_plan.md
 ├── .ssh/               # مفاتيح SSH المزدوجة (id_ed25519_source & id_ed25519_docs)
 ├── source_repo/        # الكود المصدري المستنسخ
 └── docs_repo/          # مستودع وبوابة التوثيق التفاعلية
@@ -149,7 +146,8 @@ print("Portal URL:", tunnel_url)
         │   ├── Documentation-Standards.md
         │   ├── Glossary.md
         │   ├── AI-Governance.md
-        │   └── Document-Register.md
+        │   ├── Document-Register.md
+        │   └── Quality-Audit-Report.md
         ├── 01_Administrative/
         │   ├── Project-Charter.md
         │   ├── Business-Case.md
@@ -163,11 +161,14 @@ print("Portal URL:", tunnel_url)
         │   ├── HLD.md
         │   ├── LLD.md
         │   ├── Database-ERD.md
-        │   └── API-Reference.md
+        │   ├── Data-Dictionary.md
+        │   ├── API-Reference.md
+        │   └── Integrations.md
         ├── 03_Operations/
         │   ├── Installation-Guide.md
         │   ├── Configuration-Guide.md
         │   ├── Deployment-Guide.md
+        │   ├── Security-Guide.md
         │   ├── Troubleshooting.md
         │   └── Backup-Recovery.md
         ├── 04_User-Guides/
@@ -180,20 +181,19 @@ print("Portal URL:", tunnel_url)
 
 ---
 
-## 🧩 منظومة الوكلاء والمحللات المتخصصة
+## 🧩 منظومة الوكلاء والمحللات المتخصصة (v2.0)
 
 | المكون | التخصص والمسؤولية |
 |:---|:---|
-| **ArchitectureAgent** | تحليل البنية المعمارية وتوليد وثائق SAD, HLD, LLD ومخططات Mermaid. |
-| **DatabaseAgent** | توثيق الجداول وقواميس البيانات والعلاقات بين الكيانات. |
-| **APIAgent** | استخراج وتوثيق نقاط الاتصال ومواصفات الطلب والاستجابة لـ REST APIs. |
-| **OperationsAgent** | صياغة أدلة التثبيت والنشر CI/CD واستكشاف الأعطال والنسخ الاحتياطي. |
-| **UserGuideAgent** | صياغة أدلة الاستخدام المبسطة للمستخدم النهائي ولمسؤولي النظام. |
-| **QualityAgent** | تدقيق الاتساق وتحديث سجل الوثائق المعتمد (Document Register). |
-| **SchemaParser** | قراءة ملفات SQL واستخلاص الجداول والمفاتيح الخارجية إلى Mermaid ERD. |
-| **RouteParser** | قراءة مسارات الكود (FastAPI, Flask, Express, Laravel) إلى جداول Endpoints. |
-| **ImpactAnalyzer** | تتبع الـ Git Diff وتوجيه الوكلاء لتحديث الوثائق المتأثرة بالتغيير فقط. |
-| **DocumentationChatEngine** | محرك بحث واسترجاع دلالي خفيف (In-Memory RAG) للاستجواب الذكي. |
+| **RepoScanner & SemanticFileChunker** | قراءة 100% من ملفات الكود غير المستثناة وتقسيم الملفات الضخمة بدون فقدان سطر واحد. |
+| **SecretSanitizer & IgnoreMatcher** | استبعاد `vendor`/`node_modules`/`.gitignore` وتعقيم مفاتيح API وكلمات المرور قبل أي معالجة. |
+| **PolyglotFactExtractor** | استخلاص حتمي للكلاسات والدوال والاعتماديات (PHP, Python AST, JS/TS, Java, C#, Go, Rust, Dart) + RBAC والأحداث. |
+| **SchemaParser & APISpecParser** | استخلاص جداول SQL وهجرات Yii2/Laravel/Prisma ➔ Mermaid ERD، ونقاط API من Postman/OpenAPI/Yii2/FastAPI/Express. |
+| **DualModelManager (Planner + Executor)** | تنسيق نموذج الخطة ونموذج التنفيذ مع تفريغ تلقائي لذاكرة GPU VRAM عند التبديل بين نموذجين محليين. |
+| **MapperAgent & PlannerAgent** | فحص كل ملفات المشروع (`Map`) ثم بناء المخطط الهندسي الموحد (`Planner Blueprint`). |
+| **Doc Agents (Arch/DB/API/Ops/User/Gov)** | توليد جميع وثائق الحزم الأربع بدعم مهارات MDAAR المدمجة وبروتوكول `[TBD]` / `[⚠️ BLIND SPOT]`. |
+| **QualityAgent** | تدقيق Mermaid، كشف الأسماء غير الحقيقية، وتحديث `Document-Register.md` (`L0` ➔ `L1`) و`Quality-Audit-Report.md`. |
+| **DocumentationChatEngine (Hybrid RAG)** | محرك BM25 + تطبيع العربية وتجزئة المعرفات البرمجية، مخزن بشكل دائم في `.rag_index/` مع عزل مستوى الجمهور. |
 
 ---
 

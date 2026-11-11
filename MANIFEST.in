@@ -1,0 +1,5 @@
+include README.md
+include LICENSE
+include plan.md
+recursive-include mdaar/skills *.md
+recursive-exclude tests *
