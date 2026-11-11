@@ -19,8 +19,14 @@ from mdaar.gateway.model_gateway import (
     DEFAULT_OPENAI_BASE_URL,
     DEFAULT_OPENAI_MODEL,
     FREE_GEMINI_FALLBACK_CHAIN,
+    SHARED_GEMINI_KEY_ENVS,
+    SHARED_HF_TOKEN_ENVS,
+    SHARED_OPENAI_BASE_URL_ENVS,
+    SHARED_OPENAI_KEY_ENVS,
+    SHARED_QUANTIZATION_ENVS,
     DualModelManager,
     ModelGateway,
+    diagnose_colab_secrets,
     resolve_setting,
     split_csv_values,
 )
@@ -40,38 +46,11 @@ LOCAL_MODEL_CHOICES = [
     "Qwen/Qwen2.5-Coder-1.5B-Instruct",
 ]
 
-_SHARED_GEMINI_ENVS = (
-    "MDAAR_GEMINI_KEYS",
-    "GEMINI_API_KEY",
-    "MDAAR_PLANNER_GEMINI_KEYS",
-    "MDAAR_EXECUTOR_GEMINI_KEYS",
-)
-_SHARED_OAI_URL_ENVS = (
-    "MDAAR_OPENAI_BASE_URL",
-    "MDAAR_ROUTER_URL",
-    "OPENAI_BASE_URL",
-    "MDAAR_PLANNER_OPENAI_BASE_URL",
-    "MDAAR_EXECUTOR_OPENAI_BASE_URL",
-)
-_SHARED_OAI_KEY_ENVS = (
-    "MDAAR_OPENAI_API_KEY",
-    "MDAAR_ROUTER_TOKEN",
-    "OPENROUTER_API_KEY",
-    "OPENAI_API_KEY",
-    "MDAAR_PLANNER_OPENAI_API_KEY",
-    "MDAAR_EXECUTOR_OPENAI_API_KEY",
-)
-_SHARED_QUANT_ENVS = (
-    "MDAAR_QUANTIZATION",
-    "MDAAR_PLANNER_QUANTIZATION",
-    "MDAAR_EXECUTOR_QUANTIZATION",
-)
-_SHARED_HF_ENVS = (
-    "MDAAR_HF_TOKEN",
-    "HF_TOKEN",
-    "MDAAR_PLANNER_HF_TOKEN",
-    "MDAAR_EXECUTOR_HF_TOKEN",
-)
+_SHARED_GEMINI_ENVS = SHARED_GEMINI_KEY_ENVS
+_SHARED_OAI_URL_ENVS = SHARED_OPENAI_BASE_URL_ENVS
+_SHARED_OAI_KEY_ENVS = SHARED_OPENAI_KEY_ENVS
+_SHARED_QUANT_ENVS = SHARED_QUANTIZATION_ENVS
+_SHARED_HF_ENVS = SHARED_HF_TOKEN_ENVS
 
 
 def _load_widgets_and_display(widgets_mod: Any = None, display_fn: Any = None) -> Tuple[Any, Any]:
@@ -114,11 +93,36 @@ def _infer_openai_default_model(base_url: str) -> str:
     return "auto"
 
 
-def _secret_badge_html(secret_value: str, source: str, lang: str, is_csv_keys: bool = True) -> str:
+def _secret_badge_html(
+    secret_value: str,
+    source: str,
+    lang: str,
+    is_csv_keys: bool = True,
+    env_names: Tuple[str, ...] = (),
+) -> str:
     ar = _is_rtl(lang)
     count = len(split_csv_values(secret_value)) if is_csv_keys else (1 if secret_value.strip() else 0)
     if not secret_value.strip():
-        msg = "⚠️ غير مضبوط — أدخله هنا أو أضفه في Colab Secrets" if ar else "⚠️ Not set — enter above or configure in Colab Secrets"
+        blocked = diagnose_colab_secrets(env_names, refresh=False) if env_names else {}
+        if blocked:
+            names_txt = ", ".join(blocked.keys())
+            if ar:
+                msg = (
+                    f"🔒 السر <code>{names_txt}</code> موجود في Colab Secrets لكن زر <b>Notebook access</b> مغلق — "
+                    "فعّله من أيقونة المفتاح 🔑 ثم أعد تشغيل الخلية أو أدخله هنا."
+                )
+            else:
+                msg = (
+                    f"🔒 Colab Secret(s) <code>{names_txt}</code> exist but <b>Notebook access</b> is disabled — "
+                    "enable the toggle in Colab Secrets (🔑) or enter it above."
+                )
+            return f"<div style='font-size:12px;color:#b91c1c;margin:0 0 6px 4px'>{msg}</div>"
+
+        hint_names = " / ".join(env_names[:2]) if env_names else "Colab Secrets"
+        if ar:
+            msg = f"⚠️ غير مضبوط — أدخله هنا أو أضفه في Colab Secrets (<code>{hint_names}</code>)"
+        else:
+            msg = f"⚠️ Not set — enter above or add to Colab Secrets (<code>{hint_names}</code>)"
         return f"<div style='font-size:12px;color:#b45309;margin:0 0 6px 4px'>{msg}</div>"
 
     if source.startswith(("colab-secret:", "env:")):
@@ -128,9 +132,9 @@ def _secret_badge_html(secret_value: str, source: str, lang: str, is_csv_keys: b
             msg = f"🔑 Auto-loaded from <code>{source}</code>" + (f" ({count} key(s))" if is_csv_keys else "")
     else:
         if ar:
-            msg = f"✅ مُدخل" + (f" ({count} مفتاح)" if is_csv_keys else "")
+            msg = "✅ مُدخل" + (f" ({count} مفتاح)" if is_csv_keys else "")
         else:
-            msg = f"✅ Configured" + (f" ({count} key(s))" if is_csv_keys else "")
+            msg = "✅ Configured" + (f" ({count} key(s))" if is_csv_keys else "")
     return f"<div style='font-size:12px;color:#15803d;margin:0 0 6px 4px'>{msg}</div>"
 
 
@@ -547,7 +551,7 @@ class ModelsConfigUI:
             layout=wide(),
         )
         self._gem_src = gem_src
-        self.gemini_badge = w.HTML(_secret_badge_html(gem_val, gem_src, lang, is_csv_keys=True))
+        self.gemini_badge = w.HTML(_secret_badge_html(gem_val, gem_src, lang, is_csv_keys=True, env_names=_SHARED_GEMINI_ENVS))
         self.shared_gemini_box = w.VBox([self.shared_gemini_keys, self.gemini_badge], layout=sub_layout())
 
         self.shared_openai_base_url = w.Text(
@@ -565,7 +569,7 @@ class ModelsConfigUI:
             layout=wide(),
         )
         self._oai_key_src = oai_key_src
-        self.openai_badge = w.HTML(_secret_badge_html(oai_key_val, oai_key_src, lang, is_csv_keys=True))
+        self.openai_badge = w.HTML(_secret_badge_html(oai_key_val, oai_key_src, lang, is_csv_keys=True, env_names=_SHARED_OAI_KEY_ENVS))
         self.shared_openai_box = w.VBox(
             [self.shared_openai_base_url, self.shared_openai_api_key, self.openai_badge],
             layout=sub_layout(),
@@ -588,7 +592,7 @@ class ModelsConfigUI:
             layout=wide(),
         )
         self._hf_src = hf_src
-        self.hf_badge = w.HTML(_secret_badge_html(hf_val, hf_src, lang, is_csv_keys=False))
+        self.hf_badge = w.HTML(_secret_badge_html(hf_val, hf_src, lang, is_csv_keys=False, env_names=_SHARED_HF_ENVS))
         self.shared_local_box = w.VBox(
             [self.shared_quantization, self.shared_hf_token, self.hf_badge],
             layout=sub_layout(),
@@ -597,9 +601,16 @@ class ModelsConfigUI:
         self.apply_button = w.Button(
             description="✅ تطبيق وتحديث إعدادات النماذج" if self.ar else "✅ Apply Model Configuration",
             button_style="success",
-            layout=w.Layout(width="290px", margin="6px 0"),
+            layout=w.Layout(width="270px", margin="6px 6px 6px 0"),
+        )
+        self.test_button = w.Button(
+            description="🧪 فحص اتصال النماذج الآن" if self.ar else "🧪 Test Model Connections",
+            button_style="info",
+            layout=w.Layout(width="240px", margin="6px 0"),
         )
         self.summary_html = w.HTML("")
+        self.output = w.Output()
+        actions_row = w.HBox([self.apply_button, self.test_button]) if hasattr(w, "HBox") else w.VBox([self.apply_button, self.test_button])
 
         self.root = w.VBox(
             [
@@ -620,8 +631,9 @@ class ModelsConfigUI:
                 self.shared_gemini_box,
                 self.shared_openai_box,
                 self.shared_local_box,
-                self.apply_button,
+                actions_row,
                 self.summary_html,
+                self.output,
             ],
             layout=w.Layout(width="100%", margin="4px 0"),
         )
@@ -652,7 +664,9 @@ class ModelsConfigUI:
             "shared_hf_token": self.shared_hf_token,
             "shared_local_box": self.shared_local_box,
             "apply_button": self.apply_button,
+            "test_button": self.test_button,
             "summary_html": self.summary_html,
+            "output": self.output,
         }
 
         self._last_inferred_oai_model = inferred_oai_model
@@ -675,6 +689,7 @@ class ModelsConfigUI:
             ctrl.observe(self._on_change, names="value")
 
         self.apply_button.on_click(lambda _b: self.apply())
+        self.test_button.on_click(lambda _b: self.run_check())
         self._refresh_visibility()
         self.apply()
 
@@ -721,18 +736,21 @@ class ModelsConfigUI:
             self._gem_src if self.shared_gemini_keys.value.strip() else "form",
             self.lang,
             is_csv_keys=True,
+            env_names=_SHARED_GEMINI_ENVS,
         )
         self.openai_badge.value = _secret_badge_html(
             self.shared_openai_api_key.value,
             self._oai_key_src if self.shared_openai_api_key.value.strip() else "form",
             self.lang,
             is_csv_keys=True,
+            env_names=_SHARED_OAI_KEY_ENVS,
         )
         self.hf_badge.value = _secret_badge_html(
             self.shared_hf_token.value,
             self._hf_src if self.shared_hf_token.value.strip() else "form",
             self.lang,
             is_csv_keys=False,
+            env_names=_SHARED_HF_ENVS,
         )
         self._refresh_visibility()
         self.apply()
@@ -788,21 +806,56 @@ class ModelsConfigUI:
         self.namespace["executor_gateway"] = executor_gw
 
         mode_note = ("نموذج واحد" if self.ar else "Single-Model") if planner_gw is executor_gw else ("مزدوج" if self.ar else "Dual-Model")
+        p_ok, p_reason = planner_gw.check_configuration()
+        e_ok, e_reason = (p_ok, p_reason) if executor_gw is planner_gw else executor_gw.check_configuration()
+        warnings = []
+        if not p_ok:
+            warnings.append(f"Planner: {p_reason}")
+        if not e_ok and (executor_gw is not planner_gw or not warnings):
+            warnings.append(f"Executor: {e_reason}")
+
+        if warnings:
+            warn_html = "<br/>".join(f"⚠️ {w_msg}" for w_msg in warnings)
+            box_bg, box_bd, box_fg = "#fef2f2", "#fca5a5", "#991b1b"
+            extra = f"<div style='margin-top:4px;font-weight:600'>{warn_html}</div>"
+        else:
+            box_bg, box_bd, box_fg = "#f0fdf4", "#86efac", "#14532d"
+            extra = ""
+
         if self.ar:
             self.summary_html.value = (
-                f"<div style='padding:8px;border-radius:6px;background:#f0fdf4;border:1px solid #86efac;color:#14532d;font-size:13px'>"
+                f"<div style='padding:8px;border-radius:6px;background:{box_bg};border:1px solid {box_bd};color:{box_fg};font-size:13px'>"
                 f"🧠 <b>الخطة:</b> <code>{planner_gw.descriptor}</code> ({len(planner_gw.api_keys)} مفتاح) &nbsp;|&nbsp; "
                 f"⚙️ <b>التنفيذ والفحص:</b> <code>{executor_gw.descriptor}</code> ({len(executor_gw.api_keys)} مفتاح) &nbsp;|&nbsp; "
-                f"<b>الوضع:</b> {mode_note}</div>"
+                f"<b>الوضع:</b> {mode_note}{extra}</div>"
             )
         else:
             self.summary_html.value = (
-                f"<div style='padding:8px;border-radius:6px;background:#f0fdf4;border:1px solid #86efac;color:#14532d;font-size:13px'>"
+                f"<div style='padding:8px;border-radius:6px;background:{box_bg};border:1px solid {box_bd};color:{box_fg};font-size:13px'>"
                 f"🧠 <b>Planner:</b> <code>{planner_gw.descriptor}</code> ({len(planner_gw.api_keys)} key(s)) &nbsp;|&nbsp; "
                 f"⚙️ <b>Executor:</b> <code>{executor_gw.descriptor}</code> ({len(executor_gw.api_keys)} key(s)) &nbsp;|&nbsp; "
-                f"<b>Mode:</b> {mode_note}</div>"
+                f"<b>Mode:</b> {mode_note}{extra}</div>"
             )
         return planner_gw, executor_gw
+
+    def run_check(self) -> Dict[str, Any]:
+        """Run a lightweight live connectivity probe on active Planner & Executor gateways."""
+        planner_gw, executor_gw = self.apply()
+        results: Dict[str, Any] = {}
+
+        def _work() -> None:
+            print(f"🔎 جاري فحص اتصال مودل الخطة ({planner_gw.descriptor})..." if self.ar else f"🔎 Testing Planner Model ({planner_gw.descriptor})...")
+            p_res = planner_gw.test_connection()
+            results["planner"] = p_res
+            print(p_res["message"])
+            if executor_gw is not planner_gw:
+                print(f"🔎 جاري فحص اتصال مودل التنفيذ ({executor_gw.descriptor})..." if self.ar else f"🔎 Testing Executor Model ({executor_gw.descriptor})...")
+                e_res = executor_gw.test_connection()
+                results["executor"] = e_res
+                print(e_res["message"])
+
+        _safe_run_into_output(self.output, _work)
+        return results
 
 
 class FreeRouterConfigUI:
@@ -872,10 +925,10 @@ class FreeRouterConfigUI:
             chk = w.Checkbox(value=enabled, description=f"تفعيل {label}" if self.ar else f"Enable {label}", indent=False, layout=wide())
             keys_w = w.Password(value=k_val, placeholder="key1,key2", description=f"مفاتيح {label}:" if self.ar else f"{label} Keys:", style=style, layout=wide())
             models_w = w.Text(value=m_val, description=f"موديلات {label}:" if self.ar else f"{label} Models:", style=style, layout=wide())
-            badge = w.HTML(_secret_badge_html(k_val, k_src, lang, is_csv_keys=True))
+            badge = w.HTML(_secret_badge_html(k_val, k_src, lang, is_csv_keys=True, env_names=key_envs))
             box = w.VBox([keys_w, badge, models_w], layout=indent_box())
 
-            self.provider_controls[key] = {"chk": chk, "keys": keys_w, "models": models_w, "badge": badge, "box": box, "src": k_src}
+            self.provider_controls[key] = {"chk": chk, "keys": keys_w, "models": models_w, "badge": badge, "box": box, "src": k_src, "key_envs": key_envs}
             provider_widgets.extend([chk, box])
 
         if not any_preloaded:
@@ -955,7 +1008,13 @@ class FreeRouterConfigUI:
     def _on_change(self, _change: Any = None) -> None:
         for item in self.provider_controls.values():
             kval = item["keys"].value
-            item["badge"].value = _secret_badge_html(kval, item["src"] if kval.strip() else "form", self.lang, is_csv_keys=True)
+            item["badge"].value = _secret_badge_html(
+                kval,
+                item["src"] if kval.strip() else "form",
+                self.lang,
+                is_csv_keys=True,
+                env_names=item.get("key_envs", ()),
+            )
         self._refresh_visibility()
         self.apply()
 

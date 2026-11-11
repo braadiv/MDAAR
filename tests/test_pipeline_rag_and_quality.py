@@ -186,3 +186,32 @@ def test_full_dual_model_pipeline_and_persistent_rag_index(tmp_path):
 
     answer = reloaded_rag.ask("ما هي الجداول والوحدات في النظام؟", audience="Developer")
     assert "orders" in answer or "OrderController" in answer
+
+
+def test_pipeline_surfaces_actual_model_errors_instead_of_generic_notice(tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("MDAAR_GEMINI_KEYS", raising=False)
+    ws = tmp_path / "err_ws"
+    unconfigured = ModelGateway(provider="Gemini", model_name="gemini-3.8-flash", api_keys=[])
+
+    pipeline = MDAARPipeline(
+        project_name="NoKeyDemo",
+        base_workspace=ws,
+        gateway=unconfigured,
+    )
+    (pipeline.source_repo_dir / "app.py").write_text("def hello():\n    return 'world'\n", encoding="utf-8")
+
+    stats = pipeline.run_multi_agent_generation()
+    out = capsys.readouterr().out
+
+    assert "due to model response notice" not in out
+    assert "Model readiness notice" in out
+    assert "Map Pass fallback activated" in out
+    assert "Planner Blueprint fallback activated" in out
+    assert "Keeping deterministic/baseline content" in out
+    assert "GEMINI_API_KEY" in out
+    assert stats["model_stats"]["planner_errors"] >= 1
+    assert stats["model_stats"]["executor_errors"] >= 1
+    assert stats["model_stats"]["last_executor_error"]
+    assert stats["model_stats"]["last_planner_error"]
+

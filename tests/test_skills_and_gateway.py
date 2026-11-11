@@ -17,6 +17,7 @@ from mdaar.gateway import (
     DualModelManager,
     FreeRouterServer,
     ModelGateway,
+    diagnose_colab_secrets,
     ensure_local_llm_dependencies,
     resolve_setting,
 )
@@ -632,4 +633,100 @@ def test_interactive_free_router_ui_checkbox_hiding_and_secrets(monkeypatch):
     assert ui.widgets["openrouter_box"].layout.display == ""
     ui.widgets["openrouter_keys"].value = "sk-or-test-key"
     assert [r["name"] for r in ns["router_server"].get_health_payload()["routes"]] == ["groq", "openrouter"]
+
+
+def test_colab_secret_notebook_access_diagnostics_and_gateway_test_button(monkeypatch):
+    fake_w = _make_fake_ipywidgets()
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("MDAAR_GEMINI_KEYS", raising=False)
+
+    class NotebookAccessError(Exception):
+        pass
+
+    class SecretNotFoundError(Exception):
+        pass
+
+    def _fake_userdata_get(name):
+        if name == "GEMINI_API_KEY":
+            raise NotebookAccessError("Notebook does not have access to secret GEMINI_API_KEY")
+        raise SecretNotFoundError(f"Secret {name} does not exist")
+
+    fake_colab = types.ModuleType("google.colab")
+    fake_userdata = types.ModuleType("google.colab.userdata")
+    fake_userdata.get = _fake_userdata_get
+    fake_colab.userdata = fake_userdata
+    fake_google = sys.modules.get("google") or types.ModuleType("google")
+    monkeypatch.setitem(sys.modules, "google", fake_google)
+    monkeypatch.setitem(sys.modules, "google.colab", fake_colab)
+    monkeypatch.setitem(sys.modules, "google.colab.userdata", fake_userdata)
+
+    mg_mod._COLAB_SECRET_ISSUES.clear()
+    ns = {}
+    ui = launch_models_config_ui(
+        lang="ar",
+        namespace=ns,
+        widgets_mod=fake_w,
+        display_fn=lambda *_a: None,
+        auto_display=False,
+    )
+
+    issues = diagnose_colab_secrets(("MDAAR_GEMINI_KEYS", "GEMINI_API_KEY"))
+    assert issues == {"GEMINI_API_KEY": "notebook_access_denied"}
+    assert "Notebook access" in ui.widgets["summary_html"].value
+    assert "#fef2f2" in ui.widgets["summary_html"].value
+
+    chk_results = ui.run_check()
+    assert chk_results["planner"]["success"] is False
+    assert "Notebook access" in chk_results["planner"]["message"]
+
+    # When access is granted and api_keys=None, ModelGateway() auto-loads GEMINI_API_KEY
+    monkeypatch.setattr(fake_userdata, "get", lambda name: "AIzaAutoColabKey1234567890" if name == "GEMINI_API_KEY" else None)
+    mg_mod._COLAB_SECRET_ISSUES.clear()
+    auto_gw = ModelGateway(provider="Gemini")
+    assert auto_gw.api_keys == ["AIzaAutoColabKey1234567890"]
+    assert auto_gw.max_new_tokens == 4096
+
+    mg_mod._COLAB_SECRET_ISSUES.clear()
+
+
+def test_gemini_empty_finish_reason_and_test_connection(monkeypatch):
+    class _FakeGenConfig:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    class _FakeModels:
+        responses = []
+
+        def generate_content(self, model, contents, config=None):
+            return self.responses.pop(0)
+
+    class _FakeClient:
+        def __init__(self, api_key):
+            self.models = _FakeModels()
+
+    fake_google = sys.modules.get("google") or types.ModuleType("google")
+    fake_genai = types.ModuleType("google.genai")
+    fake_types = types.ModuleType("google.genai.types")
+    fake_types.GenerateContentConfig = _FakeGenConfig
+    fake_genai.Client = _FakeClient
+    fake_genai.types = fake_types
+    fake_google.genai = fake_genai
+    monkeypatch.setitem(sys.modules, "google", fake_google)
+    monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
+    monkeypatch.setitem(sys.modules, "google.genai.types", fake_types)
+
+    _FakeModels.responses = [
+        types.SimpleNamespace(text=None, candidates=[types.SimpleNamespace(finish_reason="MAX_TOKENS")], prompt_feedback=None),
+        types.SimpleNamespace(text="OK"),
+    ]
+    gw = ModelGateway(provider="Gemini", model_name="gemini-3.8-flash", api_keys=["AIzaDummyKeyForTest123456"])
+    probe_fail = gw.test_connection()
+    assert probe_fail["success"] is False
+    assert "finish_reason=MAX_TOKENS" in probe_fail["message"]
+    assert "finish_reason=MAX_TOKENS" in gw.last_error
+
+    probe_ok = gw.test_connection()
+    assert probe_ok["success"] is True
+    assert gw.last_error == ""
+
 

@@ -41,6 +41,51 @@ DEFAULT_OPENAI_MODEL = "openrouter/free"
 
 _AUTO_PREFIXES = ("AUTO", "FROM_ENV", "FROM_SECRET")
 
+SHARED_GEMINI_KEY_ENVS = (
+    "MDAAR_GEMINI_KEYS",
+    "GEMINI_API_KEY",
+    "MDAAR_PLANNER_GEMINI_KEYS",
+    "MDAAR_EXECUTOR_GEMINI_KEYS",
+)
+SHARED_OPENAI_BASE_URL_ENVS = (
+    "MDAAR_OPENAI_BASE_URL",
+    "MDAAR_ROUTER_URL",
+    "OPENAI_BASE_URL",
+    "MDAAR_PLANNER_OPENAI_BASE_URL",
+    "MDAAR_EXECUTOR_OPENAI_BASE_URL",
+)
+SHARED_OPENAI_KEY_ENVS = (
+    "MDAAR_OPENAI_API_KEY",
+    "MDAAR_ROUTER_TOKEN",
+    "OPENROUTER_API_KEY",
+    "OPENAI_API_KEY",
+    "MDAAR_PLANNER_OPENAI_API_KEY",
+    "MDAAR_EXECUTOR_OPENAI_API_KEY",
+)
+SHARED_QUANTIZATION_ENVS = (
+    "MDAAR_QUANTIZATION",
+    "MDAAR_PLANNER_QUANTIZATION",
+    "MDAAR_EXECUTOR_QUANTIZATION",
+)
+SHARED_HF_TOKEN_ENVS = (
+    "MDAAR_HF_TOKEN",
+    "HF_TOKEN",
+    "MDAAR_PLANNER_HF_TOKEN",
+    "MDAAR_EXECUTOR_HF_TOKEN",
+)
+
+_COLAB_SECRET_ISSUES = {}
+
+
+def _classify_colab_secret_error(exc):
+    cls_name = type(exc).__name__.lower()
+    msg_low = str(exc).lower()
+    if "notebookaccess" in cls_name or "does not have access" in msg_low:
+        return "notebook_access_denied"
+    if "timeout" in cls_name or "timeout" in msg_low:
+        return "timeout"
+    return ""
+
 
 def _lookup_colab_secret(name):
     """Safely look up a secret from google.colab.userdata when running inside Colab."""
@@ -48,9 +93,26 @@ def _lookup_colab_secret(name):
         from google.colab import userdata
 
         val = userdata.get(name)
+        _COLAB_SECRET_ISSUES.pop(name, None)
         return str(val).strip() if val is not None else ""
-    except Exception:
+    except Exception as exc:
+        issue = _classify_colab_secret_error(exc)
+        if issue:
+            _COLAB_SECRET_ISSUES[name] = issue
+        else:
+            _COLAB_SECRET_ISSUES.pop(name, None)
         return ""
+
+
+def diagnose_colab_secrets(env_names=(), refresh=False):
+    """Return {secret_name: issue_code} for Colab Secrets blocked by access or timeout."""
+    if isinstance(env_names, str):
+        env_names = (env_names,)
+    if refresh:
+        for name in env_names:
+            if name:
+                _lookup_colab_secret(name)
+    return {name: _COLAB_SECRET_ISSUES[name] for name in env_names if name in _COLAB_SECRET_ISSUES}
 
 
 def _parse_bool_value(raw, default=False):
@@ -319,7 +381,7 @@ class ModelGateway:
         local_model_path=None,
         hf_token=None,
         quantization="4bit",
-        max_new_tokens=2048,
+        max_new_tokens=4096,
         temperature=0.2,
         base_url=None,
         extra_headers=None,
@@ -334,7 +396,10 @@ class ModelGateway:
         else:
             self.model_name = model_name
 
-        if isinstance(api_keys, str):
+        if api_keys is None and self.provider == "Gemini":
+            resolved_gem = resolve_setting("", SHARED_GEMINI_KEY_ENVS, default="")
+            self.api_keys = split_csv_values(resolved_gem)
+        elif isinstance(api_keys, str):
             self.api_keys = split_csv_values(api_keys)
         else:
             self.api_keys = [str(k).strip() for k in (api_keys or []) if str(k).strip()]
@@ -353,6 +418,8 @@ class ModelGateway:
         self._local_pipeline = None
         self._unavailable_models = set()
         self._cooldown_until = {}
+        self.last_error = ""
+        self._printed_static_errors = set()
 
     @property
     def is_local(self):
@@ -436,19 +503,89 @@ class ModelGateway:
         until = self._cooldown_until.get((model_id, key_idx), 0.0)
         return time.monotonic() < until
 
+    def _record_and_format_error(self, message, print_once_key=None):
+        text = str(message or "Unknown model error").strip()
+        if not text.lstrip().startswith(self.ERROR_PREFIX):
+            text = f"{self.ERROR_PREFIX}{text}"
+        cleaned = redact_secrets(text, self.api_keys)
+        self.last_error = cleaned
+        if print_once_key and print_once_key not in self._printed_static_errors:
+            self._printed_static_errors.add(print_once_key)
+            print(cleaned)
+        return cleaned
+
+    def check_configuration(self):
+        """Return `(ok, reason)` without performing network requests."""
+        if self.provider == "Gemini" and not self.api_keys:
+            blocked = diagnose_colab_secrets(SHARED_GEMINI_KEY_ENVS, refresh=False)
+            if blocked:
+                names = ", ".join(blocked.keys())
+                return (
+                    False,
+                    f"Colab Secret(s) [{names}] found but 'Notebook access' is turned off (or timed out). "
+                    "Enable the toggle in Colab Secrets (🔑) or paste the key in the form.",
+                )
+            return (
+                False,
+                "No API keys configured for Gemini (set `GEMINI_API_KEY` / `MDAAR_GEMINI_KEYS` in Colab Secrets or the form).",
+            )
+
+        if self.is_openai_compatible and not self.api_keys:
+            low_url = (self.base_url or "").lower()
+            if any(h in low_url for h in ("openrouter.ai", "api.groq.com", "api.mistral.ai", "api.cerebras.ai", "api.openai.com")):
+                blocked = diagnose_colab_secrets(SHARED_OPENAI_KEY_ENVS, refresh=False)
+                if blocked:
+                    names = ", ".join(blocked.keys())
+                    return (
+                        False,
+                        f"Colab Secret(s) [{names}] found for OpenAI-Gateway but 'Notebook access' is disabled.",
+                    )
+                return False, f"No API key configured for OpenAI-Gateway ({self.base_url})."
+
+        return True, "OK"
+
+    def test_connection(self):
+        """Perform a lightweight configuration + live 1-reply probe against this gateway."""
+        ok_cfg, reason_cfg = self.check_configuration()
+        if not ok_cfg:
+            return {
+                "success": False,
+                "descriptor": self.descriptor,
+                "message": f"❌ {self.descriptor}: {reason_cfg}",
+            }
+
+        res = self.generate("Reply with only: OK", system_instruction="Respond with OK.", max_new_tokens=256)
+        if DualModelManager.is_error(res):
+            err_msg = redact_secrets(res, self.api_keys).strip()
+            return {
+                "success": False,
+                "descriptor": self.descriptor,
+                "message": f"❌ {self.descriptor}: {err_msg}",
+            }
+
+        return {
+            "success": True,
+            "descriptor": self.descriptor,
+            "message": f"✅ الاتصال ناجح: {self.descriptor}",
+        }
+
     def _run_with_candidate_failover(self, keys, call_fn, require_key=True):
         """
         Shared candidate rotation + model failover engine for Gemini and OpenAI-Gateway.
         Rotates API keys across requests and skips 404-dead models or temporarily cooled-down pairs.
         """
         if require_key and not keys:
-            return f"{self.ERROR_PREFIX}No API keys configured for {self.provider}."
+            _, cfg_reason = self.check_configuration()
+            return self._record_and_format_error(cfg_reason, print_once_key="no_keys")
 
         key_pool = keys if keys else [""]
         models = self._resolve_model_candidates()
         active_models = [m for m in models if m not in self._unavailable_models]
         if not active_models:
-            return f"{self.ERROR_PREFIX}All configured models ({', '.join(models)}) returned unavailable/404 errors."
+            return self._record_and_format_error(
+                f"All configured models ({', '.join(models)}) returned unavailable/404 errors.",
+                print_once_key="all_404",
+            )
 
         now = time.monotonic()
         candidate_pairs = []
@@ -480,6 +617,7 @@ class ModelGateway:
             ok, payload, status_code = call_fn(model_id, key)
             if ok:
                 self.current_key_idx = (k_idx + 1) % n_keys
+                self.last_error = ""
                 return payload
 
             last_error = redact_secrets(payload, key_pool)
@@ -494,7 +632,7 @@ class ModelGateway:
                     f"(key #{k_idx + 1}, try {attempt_idx}/{total}): {last_error[:160]}"
                 )
 
-        return f"{self.ERROR_PREFIX}Generation failed across all keys/models: {last_error}"
+        return self._record_and_format_error(f"Generation failed across all keys/models: {last_error}")
 
     def generate(self, prompt, system_instruction="", max_new_tokens=None):
         tokens = int(max_new_tokens) if max_new_tokens is not None else self.max_new_tokens
@@ -513,6 +651,7 @@ class ModelGateway:
                 print(f"🔀 Primary gateway failed; routing fallback to `{fb.descriptor}`...")
                 fb_res = fb.generate(prompt, system_instruction=system_instruction, max_new_tokens=tokens)
                 if not str(fb_res).lstrip().startswith(self.ERROR_PREFIX):
+                    self.last_error = ""
                     return fb_res
                 res = fb_res
 
@@ -562,7 +701,18 @@ class ModelGateway:
             text = getattr(resp, "text", None)
             if text:
                 return True, text, 200
-            return False, "Empty response returned by Gemini.", 500
+            details = []
+            candidates = getattr(resp, "candidates", None) or []
+            if candidates:
+                fin = getattr(candidates[0], "finish_reason", None)
+                if fin:
+                    details.append(f"finish_reason={fin}")
+            feedback = getattr(resp, "prompt_feedback", None)
+            block_reason = getattr(feedback, "block_reason", None) if feedback is not None else None
+            if block_reason:
+                details.append(f"block_reason={block_reason}")
+            suffix = f" ({', '.join(details)})" if details else ""
+            return False, f"Empty response returned by Gemini{suffix}.", 500
         except Exception as exc:
             err_str = redact_secrets(str(exc), self.api_keys)
             status = 429 if ("429" in err_str or "quota" in err_str.lower() or "resource_exhausted" in err_str.lower()) else (
@@ -677,14 +827,16 @@ class ModelGateway:
 
             out = self._local_pipeline(messages, **gen_kwargs)
             generated = out[0]["generated_text"]
+            self.last_error = ""
             if isinstance(generated, list) and generated:
                 return generated[-1].get("content", str(generated[-1]))
             return str(generated)
         except Exception as e:
-            return (
-                f"{self.ERROR_PREFIX}Local generation error: {e}\n"
+            return self._record_and_format_error(
+                f"Local generation error: {e}\n"
                 "(Tip: For 7B/8B/9B models on Colab, ensure T4 GPU is selected and run: "
-                "pip install -U transformers accelerate bitsandbytes)"
+                "pip install -U transformers accelerate bitsandbytes)",
+                print_once_key="local_error",
             )
 
 
@@ -704,6 +856,8 @@ class DualModelManager:
             "planner_errors": 0,
             "executor_errors": 0,
             "vram_switches": 0,
+            "last_planner_error": "",
+            "last_executor_error": "",
         }
 
     @property
@@ -737,6 +891,7 @@ class DualModelManager:
         out = self.planner_gateway.generate(prompt, system_instruction=system_instruction, max_new_tokens=max_new_tokens)
         if self.is_error(out):
             self.stats["planner_errors"] += 1
+            self.stats["last_planner_error"] = redact_secrets(str(out or "Empty response").strip().splitlines()[0])[:200]
         return out
 
     def generate_as_executor(self, prompt, system_instruction="", max_new_tokens=None):
@@ -745,6 +900,7 @@ class DualModelManager:
         out = self.executor_gateway.generate(prompt, system_instruction=system_instruction, max_new_tokens=max_new_tokens)
         if self.is_error(out):
             self.stats["executor_errors"] += 1
+            self.stats["last_executor_error"] = redact_secrets(str(out or "Empty response").strip().splitlines()[0])[:200]
         return out
 
     def cleanup_all(self):
@@ -755,3 +911,13 @@ class DualModelManager:
     @staticmethod
     def is_error(text):
         return not text or str(text).lstrip().startswith(ModelGateway.ERROR_PREFIX)
+
+    @staticmethod
+    def summarize_error(text, limit=180):
+        raw = str(text or "").strip()
+        if not raw:
+            return "Empty response returned by model."
+        first_line = raw.splitlines()[0].strip()
+        if len(first_line) > limit:
+            return first_line[: limit - 3] + "..."
+        return first_line

@@ -8,6 +8,7 @@ from .model_gateway import (
     FREE_GEMINI_FALLBACK_CHAIN,
     DualModelManager,
     ModelGateway,
+    diagnose_colab_secrets,
     ensure_local_llm_dependencies,
     resolve_setting,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "DualModelManager",
     "FreeRouterServer",
     "ModelGateway",
+    "diagnose_colab_secrets",
     "ensure_local_llm_dependencies",
     "launch_cloudflared_tunnel",
     "resolve_setting",

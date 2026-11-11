@@ -628,6 +628,12 @@ nav:
 
         repo_instructions = self.skill_loader.discover_repo_instructions(self.source_repo_dir)
 
+        # Pre-flight readiness check so missing keys / Colab Secret permissions are surfaced immediately
+        for role_label, gw in (("Planner", self.planner_gateway), ("Executor", self.executor_gateway)):
+            ok_cfg, reason_cfg = gw.check_configuration()
+            if not ok_cfg:
+                print(f"⚠️ {role_label} Model readiness notice ({gw.descriptor}): {reason_cfg}")
+
         # 3: Fresh Map Pass on Executor Model ("إعدادات مودل التنفيذ")
         print(f"🔎 Map Pass (100% full files) via Executor Model: {self.executor_gateway.descriptor}")
         mapper = MapperAgent(
@@ -700,7 +706,8 @@ nav:
 
             # Preserve deterministic Data-Dictionary / Database-ERD / API-Reference tables when augmenting
             if DualModelManager.is_error(generated):
-                print(f"⚠️ Keeping deterministic/baseline content for `{doc_rel}` due to model response notice.")
+                reason = DualModelManager.summarize_error(generated)
+                print(f"⚠️ Keeping deterministic/baseline content for `{doc_rel}` — {reason}")
                 continue
 
             if doc_rel == "02_Technical/Database-ERD.md" and tables:

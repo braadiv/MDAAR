@@ -9,6 +9,7 @@ from collections import defaultdict
 from pathlib import Path
 import re
 
+from mdaar.gateway.model_gateway import DualModelManager
 from mdaar.skills.loader import SkillLoader
 
 
@@ -153,6 +154,7 @@ class MapperAgent(BaseDocAgent):
             f"Languages: {fact_sheet.language_counts} | Frameworks: {fact_sheet.detected_frameworks}"
         )
 
+        logged_error = False
         for idx, batch in enumerate(batches, 1):
             module_name = batch["module"]
             files_desc = ", ".join(item["label"] for item in batch["items"])
@@ -173,9 +175,15 @@ class MapperAgent(BaseDocAgent):
 
             res = self._invoke_gateway(prompt, sys_prompt)
             # If the LLM call fails or is unavailable, still preserve deterministic FileFactCards
-            if res and not str(res).lstrip().startswith("⚠️ "):
+            if not DualModelManager.is_error(res):
                 entry = f"#### [{files_desc}]\n{res.strip()}"
             else:
+                if not logged_error:
+                    print(
+                        f"⚠️ Map Pass fallback activated (batch {idx}/{total_batches}): "
+                        f"{DualModelManager.summarize_error(res)}"
+                    )
+                    logged_error = True
                 entry = self._fallback_card_summary(batch["items"], fact_sheet)
 
             module_findings[module_name].append(entry)
@@ -283,7 +291,8 @@ class PlannerAgent(BaseDocAgent):
             "5. قائمة المصطلحات الموحدة المعتمدة في المشروع."
         )
         res = self._invoke_gateway(prompt, sys_prompt)
-        if not res or str(res).lstrip().startswith("⚠️ "):
+        if DualModelManager.is_error(res):
+            print(f"⚠️ Planner Blueprint fallback activated: {DualModelManager.summarize_error(res)}")
             return self._deterministic_fallback_plan(fact_sheet, db_summary_hint, api_summary_hint)
         return res
 
