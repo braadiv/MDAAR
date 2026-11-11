@@ -188,7 +188,7 @@ class ModelGateway:
                 device_desc = f"GPU ({torch.cuda.get_device_name(0)})" if is_cuda else "CPU"
                 print(f"⏳ Loading local model ({model_id}) on {device_desc}...")
 
-                tokenizer = AutoTokenizer.with_pretrained(
+                tokenizer = AutoTokenizer.from_pretrained(
                     model_id,
                     token=self.hf_token,
                     trust_remote_code=True
@@ -220,7 +220,7 @@ class ModelGateway:
                     model_kwargs["device_map"] = "cpu"
                     model_kwargs["torch_dtype"] = torch.float32
 
-                model = AutoModelForCausalLM.with_pretrained(model_id, **model_kwargs)
+                model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
                 self._local_pipeline = pipeline(
                     "text-generation",
                     model=model,
@@ -233,13 +233,24 @@ class ModelGateway:
                 messages.append({"role": "system", "content": system_instruction})
             messages.append({"role": "user", "content": prompt})
 
+            # Handle models whose chat_template rejects the 'system' role (e.g., Gemma-2)
+            tok = self._local_pipeline.tokenizer
+            if system_instruction and getattr(tok, "chat_template", None):
+                try:
+                    tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                except Exception:
+                    messages = [{"role": "user", "content": f"{system_instruction}\n\n{prompt}"}]
+
             out = self._local_pipeline(
                 messages,
                 max_new_tokens=2048,
                 do_sample=True,
                 temperature=0.3
             )
-            return out[0]["generated_text"][-1]["content"]
+            generated = out[0]["generated_text"]
+            if isinstance(generated, list) and generated:
+                return generated[-1].get("content", str(generated[-1]))
+            return str(generated)
         except Exception as e:
             return (
                 f"⚠️ Local generation error: {e}\n"

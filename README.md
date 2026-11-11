@@ -75,8 +75,8 @@ pip install git+https://github.com/braadiv/MDAAR.git
 
 # التثبيت مع دعم النماذج المحلية والتكميم 4-bit على GPU
 pip install "mdaar[local] @ git+https://github.com/braadiv/MDAAR.git"
-# أو تثبيت أدوات التسريع يدوياً:
-pip install accelerate bitsandbytes
+# أو تثبيت أدوات التسريع والتكميم يدوياً:
+pip install -U transformers accelerate bitsandbytes
 ```
 
 ### الاستخدام البرمجي في كود بايثون:

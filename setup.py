@@ -27,7 +27,7 @@ setuptools.setup(
     ],
     extras_require={
         "local": [
-            "transformers>=4.40.0",
+            "transformers>=4.43.1",
             "accelerate>=0.28.0",
             "bitsandbytes>=0.43.0",
         ],
