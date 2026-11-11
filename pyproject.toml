@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mdaar"
+version = "1.0.0"
+description = "Multi-role Dynamic Architecture for Automated Repositories (AI-Driven Software Documentation Framework)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "MDAAR Community"}
+]
+dependencies = [
+    "mkdocs-material>=9.5.0",
+    "pymdown-extensions>=10.7",
+    "google-genai>=2.0.0"
+]
