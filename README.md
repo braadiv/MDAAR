@@ -81,12 +81,20 @@ pip install -U transformers accelerate bitsandbytes
 ```python
 from mdaar_pipeline import MDAARPipeline, ModelGateway
 
-# 1. إعداد بوابة الخطة (مثلاً Gemini) وبوابة التنفيذ والفحص (مثلاً Qwen2.5-Coder أوفلاين 4-bit)
+# 1. إعداد بوابة الخطة (Gemini بالتنقل التلقائي بين الموديلات المجانية) أو عبر بوابة OpenAI متوافقة (OpenRouter / راوتر الكولاب الثاني)
 planner_gateway = ModelGateway(
     provider="Gemini",
-    model_name="gemini-2.5-flash",
-    api_keys=["KEY_1", "KEY_2"]
+    model_name="auto-free-chain",  # يبدأ بـ gemini-3.8-flash وينتقل تلقائياً عبر باقي السلسلة المجانية
+    api_keys=["KEY_1", "KEY_2"],
 )
+
+# مثال بديل: بوابة OpenAI-Gateway (OpenRouter مجاني / BYOK أو رابط راوتر الكولاب الثاني)
+# planner_gateway = ModelGateway(
+#     provider="OpenAI-Gateway",
+#     base_url="https://openrouter.ai/api/v1",
+#     model_name="openrouter/free",
+#     api_keys=["OPENROUTER_OR_ROUTER_TOKEN"],
+# )
 
 executor_gateway = ModelGateway(
     provider="Local-Offline",
@@ -123,8 +131,9 @@ print(answer)
 
 | الدفتر | الوصف | رابط الفتح المباشر |
 |:---|:---|:---:|
-| **documentation_pipeline.ipynb** | النسخة التفاعلية باللغة العربية مع نماذج Forms | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/braadiv/MDAAR/blob/main/documentation_pipeline.ipynb) |
-| **documentation_pipeline_en.ipynb** | Full Interactive English Version with Forms | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/braadiv/MDAAR/blob/main/documentation_pipeline_en.ipynb) |
+| **documentation_pipeline.ipynb** | النسخة التفاعلية باللغة العربية مع نماذج Forms وسحب أسرار كولاب تلقائياً | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/braadiv/MDAAR/blob/main/documentation_pipeline.ipynb) |
+| **documentation_pipeline_en.ipynb** | Full Interactive English Version with Forms & Colab Secrets Auto-Resolution | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/braadiv/MDAAR/blob/main/documentation_pipeline_en.ipynb) |
+| **free_router_colab.ipynb** | راوتر BYOK مجاني متعدد المزودين (`Gemini`/`Groq`/`OpenRouter`/`Mistral`/`Cerebras`) في كولاب مستقل أو محلياً بلا حدود | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/braadiv/MDAAR/blob/main/free_router_colab.ipynb) |
 
 ---
 

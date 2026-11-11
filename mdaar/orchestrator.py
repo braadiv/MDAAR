@@ -35,7 +35,7 @@ from mdaar.agents import (
     QualityAgent,
     create_agent_for_role,
 )
-from mdaar.gateway import DualModelManager, ModelGateway
+from mdaar.gateway import DualModelManager, ModelGateway, launch_cloudflared_tunnel
 from mdaar.rag import DocumentationChatEngine
 from mdaar.skills import SkillLoader
 
@@ -779,8 +779,12 @@ nav:
 
     def serve_and_tunnel(self, port=8000, timeout=30):
         if os.name != "nt":
-            subprocess.run("pkill -f 'mkdocs serve'", shell=True)
-            subprocess.run("pkill -f 'cloudflared tunnel'", shell=True)
+            subprocess.run(
+                "pkill -f 'mkdocs serve'",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
         subprocess.Popen(
             ["mkdocs", "serve", "-a", f"127.0.0.1:{port}"],
@@ -791,22 +795,9 @@ nav:
         )
         time.sleep(3)
 
-        cf_proc = subprocess.Popen(
-            ["cloudflared", "tunnel", "--url", f"http://127.0.0.1:{port}"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
+        public_url, _cf_proc = launch_cloudflared_tunnel(
+            port=port,
+            timeout=timeout,
+            stop_existing=True,
         )
-
-        public_url = None
-        start = time.time()
-        while time.time() - start < timeout:
-            line = cf_proc.stdout.readline()
-            m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
-            if m:
-                public_url = m.group(0)
-                break
-            if not line and cf_proc.poll() is not None:
-                break
-
         return public_url

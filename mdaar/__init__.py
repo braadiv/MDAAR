@@ -34,7 +34,17 @@ from mdaar.analyzers import (
     SchemaParser,
     SemanticFileChunker,
 )
-from mdaar.gateway import DualModelManager, ModelGateway
+from mdaar.gateway import (
+    DEFAULT_GEMINI_MODEL,
+    DEFAULT_OPENAI_BASE_URL,
+    DEFAULT_OPENAI_MODEL,
+    FREE_GEMINI_FALLBACK_CHAIN,
+    DualModelManager,
+    FreeRouterServer,
+    ModelGateway,
+    launch_cloudflared_tunnel,
+    resolve_setting,
+)
 from mdaar.orchestrator import MDAARPipeline
 from mdaar.rag import DocumentationChatEngine
 from mdaar.security import IgnoreMatcher, SecretSanitizer
@@ -47,11 +57,16 @@ __all__ = [
     "ArchitectureAgent",
     "BaseDocAgent",
     "DOC_SPECIFICATIONS",
+    "DEFAULT_GEMINI_MODEL",
+    "DEFAULT_OPENAI_BASE_URL",
+    "DEFAULT_OPENAI_MODEL",
+    "FREE_GEMINI_FALLBACK_CHAIN",
     "DatabaseAgent",
     "DocAuditItem",
     "DocumentationChatEngine",
     "DualModelManager",
     "FileFactCard",
+    "FreeRouterServer",
     "GitMetadata",
     "GovernanceAgent",
     "IgnoreMatcher",
@@ -73,4 +88,6 @@ __all__ = [
     "SemanticFileChunker",
     "SkillLoader",
     "UserGuideAgent",
+    "launch_cloudflared_tunnel",
+    "resolve_setting",
 ]
