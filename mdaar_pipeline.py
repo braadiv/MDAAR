@@ -116,12 +116,22 @@ class RouteParser:
 class ModelGateway:
     """Handles LLM invocation with multi-provider support, key rotation, and offline fallback."""
 
-    def __init__(self, provider="Gemini", model_name="gemini-2.5-flash", api_keys=None, local_model_path=None):
+    def __init__(
+        self,
+        provider="Gemini",
+        model_name="gemini-2.5-flash",
+        api_keys=None,
+        local_model_path=None,
+        hf_token=None,
+        quantization="4bit"
+    ):
         self.provider = provider
         self.model_name = model_name
         self.api_keys = [k.strip() for k in (api_keys or []) if k.strip()]
         self.current_key_idx = 0
         self.local_model_path = local_model_path
+        self.hf_token = hf_token
+        self.quantization = quantization
         self._local_pipeline = None
 
     def _get_active_key(self):
@@ -167,27 +177,75 @@ class ModelGateway:
         return f"⚠️ Generation failed across all keys: {last_error}"
 
     def _generate_local(self, prompt, system_instruction):
-        """Offline inference using Transformers / pipeline on Colab CPU or GPU."""
+        """Offline / GPU inference using Transformers with 4-bit NF4 quantization on Colab T4."""
         try:
             if not self._local_pipeline:
-                from transformers import pipeline
-                model_id = self.local_model_path or "Qwen/Qwen2.5-Coder-1.5B-Instruct"
-                print(f"⏳ Loading local model ({model_id}) for 100% offline private inference...")
+                import torch
+                from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+
+                model_id = self.local_model_path or "Qwen/Qwen2.5-Coder-7B-Instruct"
+                is_cuda = torch.cuda.is_available()
+                device_desc = f"GPU ({torch.cuda.get_device_name(0)})" if is_cuda else "CPU"
+                print(f"⏳ Loading local model ({model_id}) on {device_desc}...")
+
+                tokenizer = AutoTokenizer.with_pretrained(
+                    model_id,
+                    token=self.hf_token,
+                    trust_remote_code=True
+                )
+                if tokenizer.pad_token_id is None:
+                    tokenizer.pad_token_id = tokenizer.eos_token_id
+
+                model_kwargs = {
+                    "token": self.hf_token,
+                    "trust_remote_code": True,
+                }
+
+                if is_cuda and self.quantization == "4bit":
+                    from transformers import BitsAndBytesConfig
+                    # For Nvidia T4 (Turing CC 7.5), float16 is native and faster than bfloat16
+                    compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+                    bnb_config = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_quant_type="nf4",
+                        bnb_4bit_compute_dtype=compute_dtype,
+                        bnb_4bit_use_double_quant=True
+                    )
+                    model_kwargs["quantization_config"] = bnb_config
+                    model_kwargs["device_map"] = "auto"
+                elif is_cuda:
+                    model_kwargs["device_map"] = "auto"
+                    model_kwargs["torch_dtype"] = torch.float16
+                else:
+                    model_kwargs["device_map"] = "cpu"
+                    model_kwargs["torch_dtype"] = torch.float32
+
+                model = AutoModelForCausalLM.with_pretrained(model_id, **model_kwargs)
                 self._local_pipeline = pipeline(
                     "text-generation",
-                    model=model_id,
-                    device_map="auto"
+                    model=model,
+                    tokenizer=tokenizer
                 )
+                print(f"✅ Local model ({model_id}) loaded successfully!")
 
             messages = []
             if system_instruction:
                 messages.append({"role": "system", "content": system_instruction})
             messages.append({"role": "user", "content": prompt})
 
-            out = self._local_pipeline(messages, max_new_tokens=1500, do_sample=True, temperature=0.3)
+            out = self._local_pipeline(
+                messages,
+                max_new_tokens=2048,
+                do_sample=True,
+                temperature=0.3
+            )
             return out[0]["generated_text"][-1]["content"]
         except Exception as e:
-            return f"⚠️ Local generation error: {e}\n(Tip: Ensure transformers & torch are installed or switch to Gemini API)"
+            return (
+                f"⚠️ Local generation error: {e}\n"
+                "(Tip: For 7B/8B/9B models on Colab, ensure T4 GPU is selected and run: "
+                "pip install -U transformers accelerate bitsandbytes)"
+            )
 
 
 # ==============================================================================

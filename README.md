@@ -70,23 +70,34 @@ Designed to run completely on **Google Colab** (preserving local hardware resour
 
 ### التثبيت المباشر من GitHub:
 ```bash
+# التثبيت الأساسي (مع دعم Google Gemini API و MkDocs)
 pip install git+https://github.com/braadiv/MDAAR.git
-```
 
-### التثبيت السريع عبر سحب الملف المصدري داخل Colab:
-```bash
-!wget -q https://raw.githubusercontent.com/braadiv/MDAAR/main/mdaar_pipeline.py -O /content/mdaar_pipeline.py
+# التثبيت مع دعم النماذج المحلية والتكميم 4-bit على GPU
+pip install "mdaar[local] @ git+https://github.com/braadiv/MDAAR.git"
+# أو تثبيت أدوات التسريع يدوياً:
+pip install accelerate bitsandbytes
 ```
 
 ### الاستخدام البرمجي في كود بايثون:
 ```python
 from mdaar_pipeline import MDAARPipeline, ModelGateway
 
-# 1. إعداد بوابة الذكاء الاصطناعي (Gemini أو Local-Offline)
+# 1. إعداد بوابة الذكاء الاصطناعي:
+# خيار أ: Google Gemini API (مع تدوير المفاتيح)
 gateway = ModelGateway(
     provider="Gemini",
     model_name="gemini-2.5-flash",
-    api_keys=["YOUR_GEMINI_KEY_1", "YOUR_GEMINI_KEY_2"] # يدعم التدوير
+    api_keys=["KEY_1", "KEY_2"]
+)
+
+# خيار ب: نموذج محلي قوي بتكميم 4-bit NF4 (كارت T4 على Colab)
+# نماذج مدعومة: Qwen/Qwen2.5-Coder-7B-Instruct, meta-llama/Meta-Llama-3.1-8B-Instruct, mistralai/Mistral-7B-Instruct-v0.3, google/gemma-2-9b-it
+gateway_local = ModelGateway(
+    provider="Local-Offline",
+    local_model_path="Qwen/Qwen2.5-Coder-7B-Instruct",
+    quantization="4bit", # يستهلك فقط ~5.5GB من VRAM
+    hf_token="YOUR_HF_TOKEN" # مطلوب فقط للموديلات المقيدة (Llama, Mistral, Gemma)
 )
 
 # 2. تهيئة خط الإنتاج

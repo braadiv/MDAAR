@@ -25,5 +25,12 @@ setuptools.setup(
         "pymdown-extensions>=10.7",
         "google-genai>=2.0.0",
     ],
+    extras_require={
+        "local": [
+            "transformers>=4.40.0",
+            "accelerate>=0.28.0",
+            "bitsandbytes>=0.43.0",
+        ],
+    },
 )
 
