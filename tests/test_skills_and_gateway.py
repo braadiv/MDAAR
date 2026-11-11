@@ -7,14 +7,21 @@ import threading
 import types
 import urllib.error
 
+from mdaar.colab_ui import (
+    launch_free_router_ui,
+    launch_models_config_ui,
+    launch_repo_config_ui,
+)
 from mdaar.gateway import (
     FREE_GEMINI_FALLBACK_CHAIN,
     DualModelManager,
     FreeRouterServer,
     ModelGateway,
+    ensure_local_llm_dependencies,
     resolve_setting,
 )
 from mdaar.gateway import free_router_server as frs_mod
+from mdaar.gateway import model_gateway as mg_mod
 from mdaar.skills import SkillLoader
 
 
@@ -396,4 +403,233 @@ def test_post_gemini_rest_completion_headers_and_gemma_handling(monkeypatch):
     assert "systemInstruction" not in body2
     assert "Sys rule" in body2["contents"][0]["parts"][0]["text"]
     assert body2["generationConfig"]["temperature"] == 0.4
+
+
+def _make_fake_ipywidgets():
+    """Minimal pure-Python ipywidgets test double supporting observe, layout.display, and children."""
+
+    class _Layout:
+        def __init__(self, width="100%", margin="", display=""):
+            self.width = width
+            self.margin = margin
+            self.display = display
+
+    class _BaseWidget:
+        def __init__(self, value=None, description="", layout=None, **_kwargs):
+            self._observers = []
+            self._value = value
+            self.description = description
+            self.layout = layout or _Layout()
+
+        @property
+        def value(self):
+            return self._value
+
+        @value.setter
+        def value(self, new_val):
+            old_val = self._value
+            self._value = new_val
+            if old_val != new_val:
+                for cb in list(self._observers):
+                    cb({"name": "value", "old": old_val, "new": new_val, "owner": self})
+
+        def observe(self, cb, names="value"):
+            if names in ("value", None):
+                self._observers.append(cb)
+
+    class _Dropdown(_BaseWidget):
+        def __init__(self, options=(), value=None, **kwargs):
+            self.options = list(options)
+            super().__init__(value=value, **kwargs)
+
+    class _Combobox(_BaseWidget):
+        def __init__(self, options=(), value="", **kwargs):
+            self.options = tuple(options)
+            super().__init__(value=value, **kwargs)
+
+    class _VBox:
+        def __init__(self, children=(), layout=None):
+            self.children = list(children)
+            self.layout = layout or _Layout()
+
+    class _Button:
+        def __init__(self, description="", button_style="", layout=None):
+            self.description = description
+            self.button_style = button_style
+            self.layout = layout or _Layout()
+            self._clicks = []
+
+        def on_click(self, cb):
+            self._clicks.append(cb)
+
+        def click(self):
+            for cb in self._clicks:
+                cb(self)
+
+    class _Output:
+        def __init__(self):
+            self.layout = _Layout()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def clear_output(self, wait=False):
+            return None
+
+    return types.SimpleNamespace(
+        Layout=_Layout,
+        Text=_BaseWidget,
+        Password=_BaseWidget,
+        Checkbox=_BaseWidget,
+        HTML=_BaseWidget,
+        Dropdown=_Dropdown,
+        Combobox=_Combobox,
+        VBox=_VBox,
+        Button=_Button,
+        Output=_Output,
+    )
+
+
+def test_ensure_local_llm_dependencies_on_demand(monkeypatch):
+    pip_calls = []
+
+    monkeypatch.setattr(mg_mod.importlib.util, "find_spec", lambda name: None if name in ("transformers", "accelerate") else object())
+    monkeypatch.setattr(mg_mod.subprocess, "run", lambda cmd, check=True: pip_calls.append(cmd))
+
+    installed = ensure_local_llm_dependencies(quantization="4bit")
+    assert installed == ["transformers>=4.43.1", "accelerate>=0.28.0"]
+    assert len(pip_calls) == 1
+    assert "transformers>=4.43.1" in pip_calls[0]
+
+    # When already present, does nothing
+    pip_calls.clear()
+    monkeypatch.setattr(mg_mod.importlib.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(mg_mod.importlib.metadata, "version", lambda pkg: "4.45.0")
+    assert ensure_local_llm_dependencies(quantization="4bit") == []
+    assert pip_calls == []
+
+
+def test_interactive_repo_ui_conditional_visibility_and_secrets(monkeypatch, tmp_path):
+    fake_w = _make_fake_ipywidgets()
+    monkeypatch.setenv("MDAAR_PROJECT_NAME", "InventoryAPI")
+    monkeypatch.setenv("MDAAR_GIT_SOURCE_URL", "https://github.com/example/inventory.git")
+    monkeypatch.setenv("MDAAR_SOURCE_AUTH", "SSH")
+    monkeypatch.setenv("MDAAR_BASE_WORKSPACE", str(tmp_path))
+
+    ns = {}
+    ui = launch_repo_config_ui(
+        lang="ar",
+        namespace=ns,
+        widgets_mod=fake_w,
+        display_fn=lambda *_a: None,
+        auto_display=False,
+        test_on_start=False,
+    )
+
+    assert ns["pipeline"].project_name == "InventoryAPI"
+    assert ns["pipeline"].source_auth == "SSH"
+    assert all("AUTO" not in opt for opt in ui.widgets["source_auth"].options)
+
+    # External Docs fields hidden cleanly while checkbox is unchecked
+    assert ui.widgets["docs_box"].layout.display == "none"
+
+    # Checking checkbox reveals docs_box and wires git_docs_url dynamically
+    ui.widgets["enable_external_docs"].value = True
+    assert ui.widgets["docs_box"].layout.display == ""
+    ui.widgets["git_docs_url"].value = "git@github.com:example/central-docs.git"
+    ui.widgets["docs_auth"].value = "SSH"
+    assert ns["pipeline"].git_docs_url == "git@github.com:example/central-docs.git"
+    assert ns["pipeline"].docs_auth == "SSH"
+
+
+def test_interactive_models_ui_dynamic_hiding_and_shared_credentials(monkeypatch, tmp_path):
+    fake_w = _make_fake_ipywidgets()
+    monkeypatch.setenv("GEMINI_API_KEY", "AIzaSharedGemKey1,AIzaSharedGemKey2")
+    monkeypatch.setenv("HF_TOKEN", "hf_shared_token_123")
+    monkeypatch.delenv("MDAAR_PLANNER_PROVIDER", raising=False)
+    monkeypatch.delenv("MDAAR_EXECUTOR_MODE", raising=False)
+
+    ns = {}
+    ui = launch_models_config_ui(
+        lang="ar",
+        namespace=ns,
+        widgets_mod=fake_w,
+        display_fn=lambda *_a: None,
+        auto_display=False,
+    )
+
+    # Zero AUTO clutter anywhere in dropdowns
+    for dd_key in ("planner_provider", "planner_gemini_model", "executor_mode", "executor_provider", "shared_quantization"):
+        assert all("AUTO" not in str(opt) for opt in ui.widgets[dd_key].options)
+
+    # Default: Planner=Gemini + Single Model -> ONLY Gemini boxes visible
+    assert ui.widgets["planner_gemini_box"].layout.display == ""
+    assert ui.widgets["planner_openai_box"].layout.display == "none"
+    assert ui.widgets["planner_local_box"].layout.display == "none"
+    assert ui.widgets["executor_custom_box"].layout.display == "none"
+    assert ui.widgets["shared_gemini_box"].layout.display == ""
+    assert ui.widgets["shared_openai_box"].layout.display == "none"
+    assert ui.widgets["shared_local_box"].layout.display == "none"
+    assert len(ns["planner_gateway"].api_keys) == 2
+
+    # Switch Planner to OpenAI-Gateway -> hides Gemini boxes, shows OpenAI boxes
+    ui.widgets["planner_provider"].value = "OpenAI-Gateway"
+    assert ui.widgets["planner_gemini_box"].layout.display == "none"
+    assert ui.widgets["planner_openai_box"].layout.display == ""
+    assert ui.widgets["shared_gemini_box"].layout.display == "none"
+    assert ui.widgets["shared_openai_box"].layout.display == ""
+
+    # Changing shared Base URL to custom Cloudflare router auto-updates default OpenAI model to 'auto'
+    ui.widgets["shared_openai_base_url"].value = "https://router.trycloudflare.com/v1"
+    assert ui.widgets["planner_openai_model"].value == "auto"
+
+    # Switch Executor to Custom Local-Offline -> shows Executor Local + Shared Local boxes alongside Shared OpenAI
+    ui.widgets["executor_mode"].value = ui._CUSTOM_AR
+    ui.widgets["executor_provider"].value = "Local-Offline"
+    assert ui.widgets["executor_custom_box"].layout.display == ""
+    assert ui.widgets["executor_local_box"].layout.display == ""
+    assert ui.widgets["shared_local_box"].layout.display == ""
+    assert ui.widgets["shared_openai_box"].layout.display == ""
+    assert ui.widgets["shared_gemini_box"].layout.display == "none"
+
+    # Both Planner & Executor share unified Local settings cleanly when both use Local-Offline
+    ui.widgets["planner_provider"].value = "Local-Offline"
+    ui.widgets["shared_quantization"].value = "None"
+    assert ui.widgets["shared_openai_box"].layout.display == "none"
+    assert ns["planner_gateway"].quantization == "None"
+    assert ns["executor_gateway"].quantization == "None"
+    assert ns["planner_gateway"].hf_token == "hf_shared_token_123"
+    assert ns["executor_gateway"].hf_token == "hf_shared_token_123"
+
+
+def test_interactive_free_router_ui_checkbox_hiding_and_secrets(monkeypatch):
+    fake_w = _make_fake_ipywidgets()
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test_groq_key")
+    monkeypatch.setenv("MDAAR_ROUTER_TOKEN", "router-secret-tok")
+
+    ns = {}
+    ui = launch_free_router_ui(
+        lang="ar",
+        namespace=ns,
+        widgets_mod=fake_w,
+        display_fn=lambda *_a: None,
+        auto_display=False,
+    )
+
+    # Auto-enabled only Groq because GROQ_API_KEY was found; disabled others are hidden
+    assert ui.widgets["groq_chk"].value is True
+    assert ui.widgets["groq_box"].layout.display == ""
+    assert ui.widgets["openrouter_chk"].value is False
+    assert ui.widgets["openrouter_box"].layout.display == "none"
+    assert [r["name"] for r in ns["router_server"].get_health_payload()["routes"]] == ["groq"]
+
+    # Checking OpenRouter reveals its box immediately
+    ui.widgets["openrouter_chk"].value = True
+    assert ui.widgets["openrouter_box"].layout.display == ""
+    ui.widgets["openrouter_keys"].value = "sk-or-test-key"
+    assert [r["name"] for r in ns["router_server"].get_health_payload()["routes"]] == ["groq", "openrouter"]
 

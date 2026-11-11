@@ -42,7 +42,11 @@ from mdaar import (
     SemanticFileChunker,
     SkillLoader,
     UserGuideAgent,
+    ensure_local_llm_dependencies,
     launch_cloudflared_tunnel,
+    launch_free_router_ui,
+    launch_models_config_ui,
+    launch_repo_config_ui,
     resolve_setting,
 )
 
@@ -84,6 +88,10 @@ __all__ = [
     "SemanticFileChunker",
     "SkillLoader",
     "UserGuideAgent",
+    "ensure_local_llm_dependencies",
     "launch_cloudflared_tunnel",
+    "launch_free_router_ui",
+    "launch_models_config_ui",
+    "launch_repo_config_ui",
     "resolve_setting",
 ]

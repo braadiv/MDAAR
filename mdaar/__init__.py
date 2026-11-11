@@ -34,6 +34,11 @@ from mdaar.analyzers import (
     SchemaParser,
     SemanticFileChunker,
 )
+from mdaar.colab_ui import (
+    launch_free_router_ui,
+    launch_models_config_ui,
+    launch_repo_config_ui,
+)
 from mdaar.gateway import (
     DEFAULT_GEMINI_MODEL,
     DEFAULT_OPENAI_BASE_URL,
@@ -42,6 +47,7 @@ from mdaar.gateway import (
     DualModelManager,
     FreeRouterServer,
     ModelGateway,
+    ensure_local_llm_dependencies,
     launch_cloudflared_tunnel,
     resolve_setting,
 )
@@ -88,6 +94,10 @@ __all__ = [
     "SemanticFileChunker",
     "SkillLoader",
     "UserGuideAgent",
+    "ensure_local_llm_dependencies",
     "launch_cloudflared_tunnel",
+    "launch_free_router_ui",
+    "launch_models_config_ui",
+    "launch_repo_config_ui",
     "resolve_setting",
 ]

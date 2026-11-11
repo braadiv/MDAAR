@@ -13,8 +13,12 @@ Supports:
 """
 
 import gc
+import importlib.metadata
+import importlib.util
 import json
 import os
+import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -257,6 +261,45 @@ def classify_provider_error(status_code, err_text):
     ):
         return "dead"
     return "cooldown"
+
+
+def ensure_local_llm_dependencies(quantization="4bit"):
+    """Install local HuggingFace GPU dependencies only on demand when Local-Offline is used."""
+    packages_to_install = []
+
+    if importlib.util.find_spec("transformers") is None:
+        packages_to_install.append("transformers>=4.43.1")
+    else:
+        try:
+            ver_str = importlib.metadata.version("transformers")
+            ver_parts = tuple(int(p) for p in ver_str.split(".")[:3] if p.isdigit())
+            if ver_parts < (4, 43, 1):
+                packages_to_install.append("transformers>=4.43.1")
+        except Exception:
+            pass
+
+    if importlib.util.find_spec("accelerate") is None:
+        packages_to_install.append("accelerate>=0.28.0")
+
+    if quantization == "4bit" and importlib.util.find_spec("bitsandbytes") is None:
+        has_cuda = False
+        if importlib.util.find_spec("torch") is not None:
+            try:
+                import torch
+
+                has_cuda = bool(torch.cuda.is_available())
+            except Exception:
+                has_cuda = False
+        if has_cuda:
+            packages_to_install.append("bitsandbytes>=0.43.0")
+
+    if packages_to_install:
+        print(f"⏳ Installing local GPU model dependencies on demand: {', '.join(packages_to_install)}...")
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-q", "--upgrade", *packages_to_install],
+            check=True,
+        )
+    return packages_to_install
 
 
 class ModelGateway:
@@ -556,6 +599,7 @@ class ModelGateway:
         )
 
     def _load_local_pipeline(self):
+        ensure_local_llm_dependencies(quantization=self.quantization)
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 
