@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="mdaar",
-    version="2.0.0",
+    version="2.1.0",
     author="MDAAR Community",
     author_email="mdaar@example.com",
     description="Multi-role Dynamic Architecture for Automated Repositories (Polyglot AI Documentation & Hybrid RAG Framework)",

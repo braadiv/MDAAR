@@ -132,13 +132,15 @@ def resolve_setting(
     default="",
     is_bool=False,
     return_source=False,
+    workspace_path=None,
 ):
     """
     Resolve a configuration value with priority:
     1. Explicit non-empty Colab Form value (unless blank or starting with AUTO/FROM_ENV/FROM_SECRET)
-    2. Google Colab Secrets (`google.colab.userdata.get`)
-    3. OS environment variables (`os.environ.get`)
-    4. Fallback `default`
+    2. Shared Workspace `.env` file (/MyDrive/AI_Documentation_Workspace/.env)
+    3. Google Colab Secrets (`google.colab.userdata.get`)
+    4. OS environment variables (`os.environ.get`)
+    5. Fallback `default`
     """
     if isinstance(env_names, str):
         env_names = (env_names,)
@@ -155,6 +157,16 @@ def resolve_setting(
         val = _parse_bool_value(raw_form, default=default) if is_bool else raw_form
         return (val, "form") if return_source else val
 
+    # Priority 2: Shared Workspace .env file
+    from .freelm_adapter import load_shared_workspace_env
+    shared_env = load_shared_workspace_env(workspace_path)
+    for name in env_names:
+        if name and name in shared_env:
+            val_env = shared_env[name]
+            val = _parse_bool_value(val_env, default=default) if is_bool else val_env
+            return (val, f"workspace-env:{name}") if return_source else val
+
+    # Priority 3: Google Colab Secrets
     for name in env_names:
         if not name:
             continue
@@ -422,6 +434,10 @@ class ModelGateway:
         self._printed_static_errors = set()
 
     @property
+    def is_freelm(self):
+        return self.provider in ("FreeLM", "Free-LLM", "FreeLM-Aggregator")
+
+    @property
     def is_local(self):
         return self.provider in ("Local-Offline", "Transformers")
 
@@ -437,6 +453,8 @@ class ModelGateway:
 
     @property
     def descriptor(self):
+        if self.is_freelm:
+            return f"FreeLM:{self.model_name or 'auto'}"
         if self.is_local:
             return f"{self.provider}:{self.local_model_path or 'Qwen/Qwen2.5-Coder-7B-Instruct'} ({self.quantization})"
         if self.is_openai_compatible:
@@ -516,6 +534,9 @@ class ModelGateway:
 
     def check_configuration(self):
         """Return `(ok, reason)` without performing network requests."""
+        if self.is_freelm:
+            return True, "FreeLM Aggregator uses shared workspace `.env`, Colab Secrets, or keyless endpoints."
+
         if self.provider == "Gemini" and not self.api_keys:
             blocked = diagnose_colab_secrets(SHARED_GEMINI_KEY_ENVS, refresh=False)
             if blocked:
@@ -634,10 +655,21 @@ class ModelGateway:
 
         return self._record_and_format_error(f"Generation failed across all keys/models: {last_error}")
 
+    def _generate_freelm(self, prompt, system_instruction=""):
+        from .freelm_adapter import FreeLMGateway
+        flm = FreeLMGateway(model_name=self.model_name or "auto", temperature=self.temperature, timeout=self.timeout)
+        ok, res = flm.generate(prompt, system_instruction=system_instruction)
+        if ok:
+            self.last_error = ""
+            return res
+        return self._record_and_format_error(res)
+
     def generate(self, prompt, system_instruction="", max_new_tokens=None):
         tokens = int(max_new_tokens) if max_new_tokens is not None else self.max_new_tokens
 
-        if self.provider == "Gemini":
+        if self.is_freelm:
+            res = self._generate_freelm(prompt, system_instruction=system_instruction)
+        elif self.provider == "Gemini":
             res = self._generate_gemini(prompt, system_instruction, max_new_tokens=tokens)
         elif self.is_openai_compatible:
             res = self._generate_openai_gateway(prompt, system_instruction, max_new_tokens=tokens)

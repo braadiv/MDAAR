@@ -1,5 +1,5 @@
 """
-Backwards-Compatible Facade for MDAAR v2.0.0.
+Backwards-Compatible Facade for MDAAR v2.1.0.
 Preserves `from mdaar_pipeline import MDAARPipeline, ModelGateway, ...`
 while routing all execution through the modular `mdaar` package.
 """
@@ -20,6 +20,7 @@ from mdaar import (
     DocumentationChatEngine,
     DualModelManager,
     FileFactCard,
+    FreeLMGateway,
     FreeRouterServer,
     GitMetadata,
     GovernanceAgent,
@@ -48,6 +49,7 @@ from mdaar import (
     launch_free_router_ui,
     launch_models_config_ui,
     launch_repo_config_ui,
+    load_shared_workspace_env,
     resolve_setting,
 )
 
@@ -67,6 +69,7 @@ __all__ = [
     "DocumentationChatEngine",
     "DualModelManager",
     "FileFactCard",
+    "FreeLMGateway",
     "FreeRouterServer",
     "GitMetadata",
     "GovernanceAgent",
@@ -95,5 +98,6 @@ __all__ = [
     "launch_free_router_ui",
     "launch_models_config_ui",
     "launch_repo_config_ui",
+    "load_shared_workspace_env",
     "resolve_setting",
 ]

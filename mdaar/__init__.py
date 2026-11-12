@@ -4,7 +4,7 @@ Polyglot full-repository reverse engineering, dual-model planning/execution,
 grounded multi-agent documentation, quality validation, and Hybrid BM25 RAG.
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 from mdaar.agents import (
     APIAgent,

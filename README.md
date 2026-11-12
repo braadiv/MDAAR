@@ -21,23 +21,27 @@ Designed to run completely on **Google Colab** (preserving local hardware resour
 
 ---
 
-## 🌟 الرؤية المعمارية للمنظومة (v2.0.0)
+## 🌟 الرؤية المعمارية للمنظومة (v2.1.0)
 
-1. **قراءة 100% من ملفات المشروع بدون حدود للسياق:**
+1. **دعم FreeLM المدمج والموديلات المجانية:**
+   - تجميع واستخدام الموديلات المجانية المتاحة عبر كولاب واحد دون الحاجة لسيرفر خارجي عبر `freelm`.
+2. **ملف الإعدادات والمفاتيح المشترك لكافة المشاريع (`/MyDrive/AI_Documentation_Workspace/.env`):**
+   - حفظ المفاتيح مرة واحدة في مجلد الورشة العام بالدرايف، وتطبيقها تلقائياً على كل المشاريع دون تكرار الإدخال.
+3. **قراءة 100% من ملفات المشروع بدون حدود للسياق:**
    - فحص شامل لجميع ملفات الكود غير المستثناة عبر نمط **Map-Reduce** (`RepoScanner` + `SemanticFileChunker` + `MapperAgent`) مع تجاهل تلقائي لمجلدات `vendor`, `node_modules`, `.git`, `.gitignore` وتعقيم الأسرار عبر `SecretSanitizer`.
-2. **معمارية النموذج المزدوج الهجينة (Planner + Executor):**
+4. **معمارية النموذج المزدوج الهجينة (Planner + Executor):**
    - **إعدادات مودل الخطة (`planner_gateway`):** يصمم الخطة الهندسية الشاملة ويراجع الجودة والاتساق (`QualityAgent`).
    - **إعدادات مودل التنفيذ (`executor_gateway`):** يتولى دائماً فحص 100% من الملفات (`Map Pass`) وكتابة جميع حزم التوثيق التفصيلية والإجابة عبر RAG (مع خيار تشغيل نموذج واحد لكليهما، وإدارة تفريغ الـ VRAM تلقائياً عند اختيار نموذجين محليين على Colab T4).
-3. **مهارات مدمجة لمنع الهلوسة داخل المستودع:**
+5. **مهارات مدمجة لمنع الهلوسة داخل المستودع:**
    - تتثبت حزمة المهارات تلقائياً مع المكتبة (`core-grounding-qa`, `reverse-engineering`, `architecture-mermaid`, `api-openapi-spec`, `docs-technical-writer`, `ops-and-user-guides`, `rag-qa-grounding`) وتفرض بروتوكول `[TBD]` و `[⚠️ BLIND SPOT]`.
-4. **محللات حتمية متعددة اللغات والأطر (`Polyglot Extractors`):**
+6. **محللات حتمية متعددة اللغات والأطر (`Polyglot Extractors`):**
    - استخراج الحقائق من PHP (Yii2, Laravel, Symfony)، Python (AST)، JS/TS، Java/Kotlin، C#/.NET، Go، Ruby، Rust، Dart/Flutter.
    - استخلاص قواعد البيانات (`SchemaParser`) من ملفات SQL DDL وهجرات Yii2/Laravel/Prisma إلى مخططات `Mermaid ERD` و`Data-Dictionary.md`.
    - استخلاص نقاط الاتصال (`APISpecParser`) من `Postman Collections` و`OpenAPI/Swagger` ومسارات `Yii2 urlManager/ActiveController/actionXxx` وFastAPI/Django/Laravel/Express/Spring/Go.
-5. **محرك Hybrid RAG دائم في `.rag_index/` + بوابة جودة آلية:**
+7. **محرك Hybrid RAG دائم في `.rag_index/` + بوابة جودة آلية:**
    - يفهرس الوثائق وحقائق الكود الحقيقية والجداول والـ APIs مع تطبيع العربية وتخصيص الجمهور (`Developer`, `Management`, `End-User`).
    - تدقيق تلقائي لمخططات Mermaid والاتساق وتحديث `Document-Register.md` (`L0` ➔ `L1`) و`Quality-Audit-Report.md`.
-6. **بوابة توثيق تفاعلية فورية (MkDocs Material + Cloudflare Tunnel):**
+8. **بوابة توثيق تفاعلية فورية (MkDocs Material + Cloudflare Tunnel):**
    - موقع تفاعلي يدعم اللغة العربية والوضع الليلي ومخططات Mermaid ومفاتيح SSH مزدوجة مستقلة (`id_ed25519_source` & `id_ed25519_docs`).
 
 ---

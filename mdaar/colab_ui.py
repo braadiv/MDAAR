@@ -33,7 +33,7 @@ from mdaar.gateway.model_gateway import (
 from mdaar.orchestrator import MDAARPipeline
 from mdaar.security.sanitizer import SecretSanitizer
 
-PROVIDER_CHOICES = ["Gemini", "OpenAI-Gateway", "Local-Offline"]
+PROVIDER_CHOICES = ["Gemini", "FreeLM", "OpenAI-Gateway", "Local-Offline"]
 AUTH_CHOICES = ["HTTPS", "SSH"]
 QUANT_CHOICES = ["4bit", "None"]
 GEMINI_MODEL_CHOICES = ["auto-free-chain", *FREE_GEMINI_FALLBACK_CHAIN]
