@@ -6,7 +6,7 @@ import pytest
 
 from mdaar.agents import DOC_SPECIFICATIONS, QualityAgent
 from mdaar.analyzers import ProjectFactSheet
-from mdaar.gateway import ModelGateway
+from mdaar.gateway import DualModelManager, ModelGateway
 from mdaar.orchestrator import MDAARPipeline
 from mdaar.rag import DocumentationChatEngine
 
@@ -214,4 +214,31 @@ def test_pipeline_surfaces_actual_model_errors_instead_of_generic_notice(tmp_pat
     assert stats["model_stats"]["executor_errors"] >= 1
     assert stats["model_stats"]["last_executor_error"]
     assert stats["model_stats"]["last_planner_error"]
+
+
+def test_chat_engine_refreshes_stale_gateway_and_falls_back_to_planner_keys(tmp_path, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("MDAAR_GEMINI_KEYS", raising=False)
+
+    ws = tmp_path / "rag_sync_ws"
+    unconfigured = ModelGateway(provider="Gemini", model_name="gemini-3.8-flash", api_keys=[])
+    pipeline = MDAARPipeline(project_name="RagSyncDemo", base_workspace=ws, gateway=unconfigured)
+    (pipeline.docs_src_dir / "index.md").write_text("# Demo App\nيحتوي على وحدة المصادقة.\n", encoding="utf-8")
+
+    # 1. Cache chat_engine while gateway still has 0 keys -> fails with role diagnostic
+    cached_engine = pipeline.get_chat_engine()
+    bad_ans = cached_engine.ask("ما هي وحدات النظام؟")
+    assert "No API keys configured" in bad_ans
+    assert "Executor: Gemini:gemini-3.8-flash | عدد المفاتيح: 0" in bad_ans
+
+    # 2. Update pipeline.model_manager (planner has key, executor lacks key) -> refreshes cached engine
+    planner_ok = StubGateway("planner")
+    pipeline.model_manager = DualModelManager(planner_ok, unconfigured)
+    refreshed_engine = pipeline.get_chat_engine()
+    assert refreshed_engine is cached_engine
+
+    good_ans = refreshed_engine.ask("ما هي وحدات النظام؟")
+    assert "⚠️" not in good_ans
+    assert len(planner_ok.calls) == 1
+
 

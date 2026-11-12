@@ -782,6 +782,9 @@ nav:
                 skill_loader=self.skill_loader,
             )
             self.chat_engine.load_documents(prefer_saved_index=True)
+        else:
+            # Keep gateway synchronized if user updated Planner/Executor keys after indexing
+            self.chat_engine.gateway = self.model_manager
         return self.chat_engine
 
     def serve_and_tunnel(self, port=8000, timeout=30):

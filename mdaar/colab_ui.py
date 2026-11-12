@@ -801,6 +801,8 @@ class ModelsConfigUI:
             pipeline.executor_gateway = executor_gw
             pipeline.gateway = executor_gw
             pipeline.model_manager = DualModelManager(planner_gw, executor_gw)
+            if getattr(pipeline, "chat_engine", None) is not None:
+                pipeline.chat_engine.gateway = pipeline.model_manager
 
         self.namespace["planner_gateway"] = planner_gw
         self.namespace["executor_gateway"] = executor_gw

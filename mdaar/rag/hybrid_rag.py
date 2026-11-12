@@ -360,8 +360,33 @@ class DocumentationChatEngine:
         )
 
         if hasattr(self.gateway, "generate_as_executor"):
-            return self.gateway.generate_as_executor(prompt, sys_prompt)
-        return self.gateway.generate(prompt, sys_prompt)
+            exec_gw = getattr(self.gateway, "executor_gateway", None)
+            plan_gw = getattr(self.gateway, "planner_gateway", None)
+            use_planner = False
+            if exec_gw is not None and plan_gw is not None and hasattr(exec_gw, "check_configuration") and hasattr(plan_gw, "check_configuration"):
+                exec_ok, _ = exec_gw.check_configuration()
+                plan_ok, _ = plan_gw.check_configuration()
+                if not exec_ok and plan_ok:
+                    use_planner = True
+
+            if use_planner:
+                res = self.gateway.generate_as_planner(prompt, sys_prompt)
+                active_gw = plan_gw
+                active_role = "Planner"
+            else:
+                res = self.gateway.generate_as_executor(prompt, sys_prompt)
+                active_gw = exec_gw
+                active_role = "Executor"
+        else:
+            res = self.gateway.generate(prompt, sys_prompt)
+            active_gw = self.gateway
+            active_role = "Gateway"
+
+        if res and str(res).lstrip().startswith("⚠️ ") and active_gw is not None:
+            desc = getattr(active_gw, "descriptor", str(type(active_gw).__name__))
+            k_cnt = len(getattr(active_gw, "api_keys", []) or [])
+            return f"{str(res).strip()}\nℹ️ [{active_role}: {desc} | عدد المفاتيح: {k_cnt}]"
+        return res
 
 
 def _split_markdown_sections(markdown_text, rel_path, max_chunk_chars=1800):
