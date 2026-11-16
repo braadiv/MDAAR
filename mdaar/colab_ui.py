@@ -255,8 +255,33 @@ class RepoConfigUI:
             style,
             wide(),
         )
-
-        self.docs_box = w.VBox([self.git_docs_url, self.docs_auth], layout=w.Layout(width="100%", margin="2px 0 6px 0"))
+        docs_tok_val, docs_tok_src = resolve_setting(
+            "",
+            ("GIT_DOCS_ACCESS_TOKEN", "MDAAR_GIT_DOCS_ACCESS_TOKEN", "DOCS_ACCESS_TOKEN", "BITBUCKET_TOKEN", "GITHUB_TOKEN"),
+            default="",
+            return_source=True,
+        )
+        self.git_docs_token = w.Password(
+            value=docs_tok_val,
+            placeholder="glpat-... / ghp_... / Bitbucket App Password / Token",
+            description="توكن مستودع التوثيق:" if self.ar else "Docs Access Token:",
+            style=style,
+            layout=wide(),
+        )
+        self._docs_tok_src = docs_tok_src
+        self.docs_token_badge = w.HTML(
+            _secret_badge_html(
+                docs_tok_val,
+                docs_tok_src,
+                lang,
+                is_csv_keys=False,
+                env_names=("GIT_DOCS_ACCESS_TOKEN", "MDAAR_GIT_DOCS_ACCESS_TOKEN"),
+            )
+        )
+        self.docs_box = w.VBox(
+            [self.git_docs_url, self.docs_auth, self.git_docs_token, self.docs_token_badge],
+            layout=w.Layout(width="100%", margin="2px 0 6px 0"),
+        )
         self.test_button = w.Button(
             description="🔌 حفظ وفحص اتصال المستودعات الآن" if self.ar else "🔌 Save & Test Repository Connection",
             button_style="primary",
@@ -294,6 +319,7 @@ class RepoConfigUI:
             "enable_external_docs": self.enable_external_docs,
             "git_docs_url": self.git_docs_url,
             "docs_auth": self.docs_auth,
+            "git_docs_token": self.git_docs_token,
             "docs_box": self.docs_box,
             "test_button": self.test_button,
             "status_html": self.status_html,
@@ -308,6 +334,7 @@ class RepoConfigUI:
             self.enable_external_docs,
             self.git_docs_url,
             self.docs_auth,
+            self.git_docs_token,
         ):
             ctrl.observe(self._on_change, names="value")
 
@@ -321,6 +348,14 @@ class RepoConfigUI:
         _set_visible(self.docs_box, bool(self.enable_external_docs.value))
 
     def _on_change(self, _change: Any = None) -> None:
+        tok_val = self.git_docs_token.value
+        self.docs_token_badge.value = _secret_badge_html(
+            tok_val,
+            self._docs_tok_src if tok_val.strip() else "form",
+            self.lang,
+            is_csv_keys=False,
+            env_names=("GIT_DOCS_ACCESS_TOKEN", "MDAAR_GIT_DOCS_ACCESS_TOKEN"),
+        )
         self._refresh_visibility()
         self.sync_pipeline()
 
@@ -340,6 +375,12 @@ class RepoConfigUI:
         docs_url_raw = self.git_docs_url.value.strip() or resolve_setting("", ("MDAAR_GIT_DOCS_URL",), default="")
         docs_url = docs_url_raw if (enable_docs and docs_url_raw) else None
         docs_auth = self.docs_auth.value or "HTTPS"
+        docs_token_raw = self.git_docs_token.value.strip() or resolve_setting(
+            "",
+            ("GIT_DOCS_ACCESS_TOKEN", "MDAAR_GIT_DOCS_ACCESS_TOKEN", "DOCS_ACCESS_TOKEN", "BITBUCKET_TOKEN", "GITHUB_TOKEN"),
+            default="",
+        )
+        docs_token = docs_token_raw if (enable_docs and docs_token_raw) else ""
 
         existing = self.namespace.get("pipeline")
         if isinstance(existing, MDAARPipeline) and existing.project_name == project_name and Path(existing.base_workspace) == workspace:
@@ -348,6 +389,7 @@ class RepoConfigUI:
             pipeline.source_auth = source_auth
             pipeline.git_docs_url = docs_url
             pipeline.docs_auth = docs_auth
+            pipeline.docs_access_token = docs_token
         else:
             planner_gw = getattr(existing, "planner_gateway", None) if existing is not None else None
             executor_gw = getattr(existing, "executor_gateway", None) if existing is not None else None
@@ -358,6 +400,7 @@ class RepoConfigUI:
                 git_docs_url=docs_url,
                 source_auth=source_auth,
                 docs_auth=docs_auth,
+                docs_access_token=docs_token,
                 planner_gateway=planner_gw,
                 executor_gateway=executor_gw,
             )
@@ -866,8 +909,14 @@ class FreeRouterConfigUI:
     _PROVIDER_SPECS = [
         ("gemini", "Gemini (Google AI Studio)", ("MDAAR_ROUTER_GEMINI_KEYS", "GEMINI_API_KEY"), ("MDAAR_ROUTER_GEMINI_MODELS",), "auto-free-chain"),
         ("groq", "Groq", ("MDAAR_ROUTER_GROQ_KEYS", "GROQ_API_KEY"), ("MDAAR_ROUTER_GROQ_MODELS",), "llama-3.3-70b-versatile,llama-3.1-8b-instant"),
+        ("sambanova", "SambaNova Systems", ("MDAAR_ROUTER_SAMBANOVA_KEYS", "SAMBANOVA_API_KEY"), ("MDAAR_ROUTER_SAMBANOVA_MODELS",), "Meta-Llama-3.3-70B-Instruct,Meta-Llama-3.1-8B-Instruct,Qwen2.5-72B-Instruct"),
+        ("hyperbolic", "Hyperbolic", ("MDAAR_ROUTER_HYPERBOLIC_KEYS", "HYPERBOLIC_API_KEY"), ("MDAAR_ROUTER_HYPERBOLIC_MODELS",), "meta-llama/Llama-3.3-70B-Instruct,meta-llama/Meta-Llama-3.1-8B-Instruct,Qwen/Qwen2.5-Coder-32B-Instruct"),
+        ("nvidia", "NVIDIA NIM", ("MDAAR_ROUTER_NVIDIA_KEYS", "NVIDIA_API_KEY", "NVIDIA_NIM_API_KEY"), ("MDAAR_ROUTER_NVIDIA_MODELS",), "meta/llama-3.3-70b-instruct,meta/llama-3.1-8b-instruct"),
+        ("zai", "Z.AI / Zhipu (GLM)", ("MDAAR_ROUTER_ZAI_KEYS", "ZAI_API_KEY", "ZHIPU_API_KEY"), ("MDAAR_ROUTER_ZAI_MODELS",), "glm-4-flash,glm-4,glm-4-plus"),
+        ("cohere", "Cohere", ("MDAAR_ROUTER_COHERE_KEYS", "COHERE_API_KEY"), ("MDAAR_ROUTER_COHERE_MODELS",), "command-r-plus,command-r"),
+        ("cloudflare", "Cloudflare Workers AI", ("MDAAR_ROUTER_CLOUDFLARE_KEYS", "CLOUDFLARE_API_KEY"), ("MDAAR_ROUTER_CLOUDFLARE_MODELS",), "@cf/meta/llama-3.3-70b-instruct,@cf/meta/llama-3.1-8b-instruct"),
         ("openrouter", "OpenRouter", ("MDAAR_ROUTER_OPENROUTER_KEYS", "OPENROUTER_API_KEY"), ("MDAAR_ROUTER_OPENROUTER_MODELS",), "openrouter/free"),
-        ("mistral", "Mistral AI", ("MDAAR_ROUTER_MISTRAL_KEYS", "MISTRAL_API_KEY"), ("MDAAR_ROUTER_MISTRAL_MODELS",), "mistral-small-latest"),
+        ("mistral", "Mistral AI", ("MDAAR_ROUTER_MISTRAL_KEYS", "MISTRAL_API_KEY"), ("MDAAR_ROUTER_MISTRAL_MODELS",), "mistral-small-latest,codestral-latest"),
         ("cerebras", "Cerebras", ("MDAAR_ROUTER_CEREBRAS_KEYS", "CEREBRAS_API_KEY"), ("MDAAR_ROUTER_CEREBRAS_MODELS",), "llama-3.3-70b"),
     ]
 
@@ -1034,6 +1083,12 @@ class FreeRouterConfigUI:
 
         g_k, g_m = _get("gemini")
         gr_k, gr_m = _get("groq")
+        sb_k, sb_m = _get("sambanova")
+        hb_k, hb_m = _get("hyperbolic")
+        nv_k, nv_m = _get("nvidia")
+        za_k, za_m = _get("zai")
+        co_k, co_m = _get("cohere")
+        cf_k, cf_m = _get("cloudflare")
         or_k, or_m = _get("openrouter")
         mi_k, mi_m = _get("mistral")
         ce_k, ce_m = _get("cerebras")
@@ -1044,6 +1099,18 @@ class FreeRouterConfigUI:
             gemini_models=g_m,
             groq_keys=gr_k,
             groq_models=gr_m,
+            sambanova_keys=sb_k,
+            sambanova_models=sb_m,
+            hyperbolic_keys=hb_k,
+            hyperbolic_models=hb_m,
+            nvidia_keys=nv_k,
+            nvidia_models=nv_m,
+            zai_keys=za_k,
+            zai_models=za_m,
+            cohere_keys=co_k,
+            cohere_models=co_m,
+            cloudflare_keys=cf_k,
+            cloudflare_models=cf_m,
             openrouter_keys=or_k,
             openrouter_models=or_m,
             mistral_keys=mi_k,

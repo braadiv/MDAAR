@@ -34,9 +34,14 @@ GEMINI_REST_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 PROVIDER_DEFAULT_URLS: Dict[str, str] = {
     "groq": "https://api.groq.com/openai/v1",
+    "sambanova": "https://api.sambanova.ai/v1",
+    "hyperbolic": "https://api.hyperbolic.xyz/v1",
+    "nvidia": "https://integrate.api.nvidia.com/v1",
+    "zai": "https://open.bigmodel.cn/api/paas/v4",
     "openrouter": "https://openrouter.ai/api/v1",
     "mistral": "https://api.mistral.ai/v1",
     "cerebras": "https://api.cerebras.ai/v1",
+    "cloudflare": "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
 }
 
 
@@ -225,12 +230,83 @@ def post_gemini_rest_completion(
         return False, redact_secrets(str(exc), [api_key]), 0
 
 
+def post_cohere_chat_completion(
+    api_key: str,
+    model: str,
+    messages: List[Dict[str, Any]],
+    max_tokens: Optional[int] = None,
+    temperature: Optional[float] = None,
+    timeout: int = 120,
+) -> Tuple[bool, str, int]:
+    """Call Cohere v2 /chat API using `Authorization: Bearer <api_key>`."""
+    endpoint = "https://api.cohere.com/v2/chat"
+    cohere_msgs: List[Dict[str, Any]] = []
+    for msg in messages or []:
+        role = str(msg.get("role", "user")).strip().lower()
+        text = _extract_message_text(msg.get("content", ""))
+        if not text:
+            continue
+        cohere_msgs.append({"role": role, "content": text})
+
+    if not cohere_msgs:
+        cohere_msgs = [{"role": "user", "content": "Hello"}]
+
+    payload: Dict[str, Any] = {
+        "model": (model or "command-r").strip(),
+        "messages": cohere_msgs,
+    }
+    if max_tokens is not None:
+        payload["max_tokens"] = int(max_tokens)
+    if temperature is not None:
+        payload["temperature"] = float(temperature)
+
+    body_bytes = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        endpoint,
+        data=body_bytes,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key.strip()}",
+            "User-Agent": "MDAAR/2.0",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            status_code = getattr(resp, "status", 200)
+        parsed = json.loads(raw) if raw else {}
+        msg_obj = parsed.get("message") or {}
+        content_items = msg_obj.get("content") or []
+        text = ""
+        if isinstance(content_items, list):
+            text = "".join(str(item.get("text", "")) for item in content_items if isinstance(item, dict) and "text" in item).strip()
+        elif isinstance(content_items, str):
+            text = content_items.strip()
+        elif "text" in parsed:
+            text = str(parsed.get("text", "")).strip()
+
+        if not text:
+            return False, "Cohere returned empty text.", status_code
+        return True, text, status_code
+    except urllib.error.HTTPError as exc:
+        err_body = ""
+        try:
+            err_body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            err_body = str(exc)
+        return False, redact_secrets(err_body or str(exc), [api_key]), int(getattr(exc, "code", 500) or 500)
+    except Exception as exc:
+        return False, redact_secrets(str(exc), [api_key]), 0
+
+
 @dataclass
 class RouterRoute:
     """Normalized route entry inside FreeRouterServer."""
 
     name: str
-    kind: str  # "gemini" or "openai"
+    kind: str  # "gemini", "cohere", or "openai"
     base_url: str = ""
     api_keys: List[str] = field(default_factory=list)
     models: List[str] = field(default_factory=list)
@@ -247,6 +323,8 @@ def _normalize_route(spec: Dict[str, Any], index: int) -> RouterRoute:
     if not raw_kind:
         if name.lower().startswith("gemini") and not base_url:
             raw_kind = "gemini"
+        elif name.lower().startswith("cohere") and not base_url:
+            raw_kind = "cohere"
         else:
             raw_kind = "openai"
 
@@ -327,6 +405,19 @@ class FreeRouterServer:
         gemini_models: Any = "",
         groq_keys: Any = "",
         groq_models: Any = "",
+        sambanova_keys: Any = "",
+        sambanova_models: Any = "",
+        hyperbolic_keys: Any = "",
+        hyperbolic_models: Any = "",
+        nvidia_keys: Any = "",
+        nvidia_models: Any = "",
+        zai_keys: Any = "",
+        zai_models: Any = "",
+        cohere_keys: Any = "",
+        cohere_models: Any = "",
+        cloudflare_keys: Any = "",
+        cloudflare_models: Any = "",
+        cloudflare_account_id: str = "",
         openrouter_keys: Any = "",
         openrouter_models: Any = "",
         mistral_keys: Any = "",
@@ -356,19 +447,42 @@ class FreeRouterServer:
                 }
             )
 
+        if split_csv_values(cohere_keys):
+            routes.append(
+                {
+                    "name": "cohere",
+                    "kind": "cohere",
+                    "api_keys": cohere_keys,
+                    "models": cohere_models or "command-r-plus,command-r",
+                }
+            )
+
+        cf_acc = (cloudflare_account_id or os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")).strip()
+        cf_url = f"https://api.cloudflare.com/client/v4/accounts/{cf_acc}/ai/v1" if cf_acc else ""
+
         openai_presets = [
-            ("groq", groq_keys, groq_models or "llama-3.3-70b-versatile,llama-3.1-8b-instant"),
-            ("openrouter", openrouter_keys, openrouter_models or "openrouter/free"),
-            ("mistral", mistral_keys, mistral_models or "mistral-small-latest"),
-            ("cerebras", cerebras_keys, cerebras_models or "llama-3.3-70b"),
+            ("groq", groq_keys, groq_models or "llama-3.3-70b-versatile,llama-3.1-8b-instant", PROVIDER_DEFAULT_URLS["groq"]),
+            ("sambanova", sambanova_keys, sambanova_models or "Meta-Llama-3.3-70B-Instruct,Meta-Llama-3.1-8B-Instruct,Qwen2.5-72B-Instruct", PROVIDER_DEFAULT_URLS["sambanova"]),
+            ("hyperbolic", hyperbolic_keys, hyperbolic_models or "meta-llama/Llama-3.3-70B-Instruct,meta-llama/Meta-Llama-3.1-8B-Instruct,Qwen/Qwen2.5-Coder-32B-Instruct", PROVIDER_DEFAULT_URLS["hyperbolic"]),
+            ("nvidia", nvidia_keys, nvidia_models or "meta/llama-3.3-70b-instruct,meta/llama-3.1-8b-instruct", PROVIDER_DEFAULT_URLS["nvidia"]),
+            ("zai", zai_keys, zai_models or "glm-4-flash,glm-4,glm-4-plus", PROVIDER_DEFAULT_URLS["zai"]),
+            ("openrouter", openrouter_keys, openrouter_models or "openrouter/free", PROVIDER_DEFAULT_URLS["openrouter"]),
+            ("mistral", mistral_keys, mistral_models or "mistral-small-latest,codestral-latest", PROVIDER_DEFAULT_URLS["mistral"]),
+            ("cerebras", cerebras_keys, cerebras_models or "llama-3.3-70b", PROVIDER_DEFAULT_URLS["cerebras"]),
         ]
-        for pname, pkeys, pmodels in openai_presets:
+        if cf_url and split_csv_values(cloudflare_keys):
+            openai_presets.append(
+                ("cloudflare", cloudflare_keys, cloudflare_models or "@cf/meta/llama-3.3-70b-instruct,@cf/meta/llama-3.1-8b-instruct", cf_url)
+            )
+
+        for item in openai_presets:
+            pname, pkeys, pmodels, purl = item
             if split_csv_values(pkeys):
                 routes.append(
                     {
                         "name": pname,
                         "kind": "openai",
-                        "base_url": PROVIDER_DEFAULT_URLS[pname],
+                        "base_url": purl,
                         "api_keys": pkeys,
                         "models": pmodels,
                     }
@@ -442,6 +556,9 @@ class FreeRouterServer:
                 return [(route, remainder)]
 
         with self._lock:
+            by_name = [r for r in self.routes if r.name.lower() == target.lower()]
+            if by_name:
+                return [(by_name[0], m) for m in by_name[0].models]
             exact = [(r, target) for r in self.routes if target in r.models]
             if exact:
                 return exact
@@ -450,6 +567,10 @@ class FreeRouterServer:
                 gemini_routes = [r for r in self.routes if r.kind == "gemini"]
                 if gemini_routes:
                     return [(r, target) for r in gemini_routes]
+            if lower.startswith("cohere") or "command-r" in lower:
+                cohere_routes = [r for r in self.routes if r.kind == "cohere"]
+                if cohere_routes:
+                    return [(r, target) for r in cohere_routes]
             if len(self.routes) == 1:
                 return [(self.routes[0], target)]
         return []
@@ -474,6 +595,15 @@ class FreeRouterServer:
         timeout = route.timeout or self.request_timeout
         if route.kind == "gemini":
             return post_gemini_rest_completion(
+                api_key=api_key,
+                model=model_id,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                timeout=timeout,
+            )
+        if route.kind == "cohere":
+            return post_cohere_chat_completion(
                 api_key=api_key,
                 model=model_id,
                 messages=messages,

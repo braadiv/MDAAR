@@ -178,6 +178,11 @@ class SecretSanitizer:
         re.IGNORECASE,
     )
 
+    GIT_URL_CREDENTIAL_PATTERN = re.compile(
+        r"(https?://)([^/\s@:]+:[^/\s@]+@|[^/\s@]+@)",
+        re.IGNORECASE,
+    )
+
     @classmethod
     def sanitize(cls, text, rel_path=""):
         """Return sanitized text with secrets replaced by [REDACTED_*] placeholders."""
@@ -200,6 +205,7 @@ class SecretSanitizer:
         for pattern, replacement in cls.TOKEN_PATTERNS:
             cleaned = pattern.sub(replacement, cleaned)
 
+        cleaned = cls.GIT_URL_CREDENTIAL_PATTERN.sub(r"\1[REDACTED_CREDENTIAL]@", cleaned)
         cleaned = cls.DSN_PASSWORD_PATTERN.sub(r"\1[REDACTED_DSN_PASS]\3", cleaned)
         cleaned = cls.ASSIGNMENT_PATTERN.sub(r"\1[REDACTED_SECRET]\3", cleaned)
         cleaned = cls.ENV_LINE_PATTERN.sub(r"\1[REDACTED_ENV_SECRET]\3", cleaned)

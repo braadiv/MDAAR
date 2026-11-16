@@ -52,7 +52,7 @@ from mdaar.gateway import (
     launch_cloudflared_tunnel,
     resolve_setting,
 )
-from mdaar.orchestrator import MDAARPipeline
+from mdaar.orchestrator import MDAARPipeline, build_authenticated_git_url
 from mdaar.rag import DocumentationChatEngine
 from mdaar.security import IgnoreMatcher, SecretSanitizer
 from mdaar.skills import SkillLoader
@@ -95,6 +95,7 @@ __all__ = [
     "SemanticFileChunker",
     "SkillLoader",
     "UserGuideAgent",
+    "build_authenticated_git_url",
     "diagnose_colab_secrets",
     "ensure_local_llm_dependencies",
     "launch_cloudflared_tunnel",
