@@ -118,11 +118,11 @@ def _secret_badge_html(
                 )
             return f"<div style='font-size:12px;color:#b91c1c;margin:0 0 6px 4px'>{msg}</div>"
 
-        hint_names = " / ".join(env_names[:2]) if env_names else "Colab Secrets"
+        hint_name = env_names[0] if env_names else "Colab Secrets"
         if ar:
-            msg = f"⚠️ غير مضبوط — أدخله هنا أو أضفه في Colab Secrets (<code>{hint_names}</code>)"
+            msg = f"⚠️ غير مضبوط — أدخله هنا أو أضفه في Colab Secrets (<code>{hint_name}</code>)"
         else:
-            msg = f"⚠️ Not set — enter above or add to Colab Secrets (<code>{hint_names}</code>)"
+            msg = f"⚠️ Not set — enter above or add to Colab Secrets (<code>{hint_name}</code>)"
         return f"<div style='font-size:12px;color:#b45309;margin:0 0 6px 4px'>{msg}</div>"
 
     if source.startswith(("colab-secret:", "env:")):
@@ -195,11 +195,11 @@ class RepoConfigUI:
         wide = lambda: w.Layout(width="96%")
         box_layout = w.Layout(width="100%", margin="4px 0")
 
-        proj_val = resolve_setting("", ("MDAAR_PROJECT_NAME",), default="MySystem")
-        src_url_val = resolve_setting("", ("MDAAR_GIT_SOURCE_URL",), default="https://github.com/octocat/Hello-World.git")
-        ws_val = resolve_setting("", ("MDAAR_BASE_WORKSPACE",), default=_default_workspace())
-        en_docs_val = resolve_setting("", ("MDAAR_ENABLE_EXTERNAL_DOCS_REPO",), default=False, is_bool=True)
-        docs_url_val = resolve_setting("", ("MDAAR_GIT_DOCS_URL",), default="")
+        proj_val = resolve_setting("", ("PROJECT_NAME", "MDAAR_PROJECT_NAME"), default="MySystem")
+        src_url_val = resolve_setting("", ("GIT_SOURCE_URL", "MDAAR_GIT_SOURCE_URL"), default="https://github.com/octocat/Hello-World.git")
+        ws_val = resolve_setting("", ("BASE_WORKSPACE", "MDAAR_BASE_WORKSPACE"), default=_default_workspace())
+        en_docs_val = resolve_setting("", ("ENABLE_EXTERNAL_DOCS_REPO", "MDAAR_ENABLE_EXTERNAL_DOCS_REPO"), default=False, is_bool=True)
+        docs_url_val = resolve_setting("", ("GIT_DOCS_URL", "MDAAR_GIT_DOCS_URL"), default="")
 
         self.project_name = w.Text(
             value=proj_val,
@@ -219,7 +219,7 @@ class RepoConfigUI:
             w,
             "مصادقة مستودع الكود:" if self.ar else "Source Auth:",
             AUTH_CHOICES,
-            ("MDAAR_SOURCE_AUTH",),
+            ("SOURCE_AUTH", "MDAAR_SOURCE_AUTH"),
             "HTTPS",
             style,
             wide(),
@@ -250,14 +250,14 @@ class RepoConfigUI:
             w,
             "مصادقة مستودع التوثيق:" if self.ar else "Docs Auth:",
             AUTH_CHOICES,
-            ("MDAAR_DOCS_AUTH",),
+            ("DOCS_AUTH", "MDAAR_DOCS_AUTH"),
             "HTTPS",
             style,
             wide(),
         )
         docs_tok_val, docs_tok_src = resolve_setting(
             "",
-            ("GIT_DOCS_ACCESS_TOKEN", "MDAAR_GIT_DOCS_ACCESS_TOKEN", "DOCS_ACCESS_TOKEN", "BITBUCKET_TOKEN", "GITHUB_TOKEN"),
+            ("GIT_DOCS_ACCESS_TOKEN", "MDAAR_GIT_DOCS_ACCESS_TOKEN"),
             default="",
             return_source=True,
         )
@@ -907,17 +907,17 @@ class FreeRouterConfigUI:
     """Interactive controller for `free_router_colab.ipynb` with provider checkboxes."""
 
     _PROVIDER_SPECS = [
-        ("gemini", "Gemini (Google AI Studio)", ("MDAAR_ROUTER_GEMINI_KEYS", "GEMINI_API_KEY"), ("MDAAR_ROUTER_GEMINI_MODELS",), "auto-free-chain"),
-        ("groq", "Groq", ("MDAAR_ROUTER_GROQ_KEYS", "GROQ_API_KEY"), ("MDAAR_ROUTER_GROQ_MODELS",), "llama-3.3-70b-versatile,llama-3.1-8b-instant"),
-        ("sambanova", "SambaNova Systems", ("MDAAR_ROUTER_SAMBANOVA_KEYS", "SAMBANOVA_API_KEY"), ("MDAAR_ROUTER_SAMBANOVA_MODELS",), "Meta-Llama-3.3-70B-Instruct,Meta-Llama-3.1-8B-Instruct,Qwen2.5-72B-Instruct"),
-        ("hyperbolic", "Hyperbolic", ("MDAAR_ROUTER_HYPERBOLIC_KEYS", "HYPERBOLIC_API_KEY"), ("MDAAR_ROUTER_HYPERBOLIC_MODELS",), "meta-llama/Llama-3.3-70B-Instruct,meta-llama/Meta-Llama-3.1-8B-Instruct,Qwen/Qwen2.5-Coder-32B-Instruct"),
-        ("nvidia", "NVIDIA NIM", ("MDAAR_ROUTER_NVIDIA_KEYS", "NVIDIA_API_KEY", "NVIDIA_NIM_API_KEY"), ("MDAAR_ROUTER_NVIDIA_MODELS",), "meta/llama-3.3-70b-instruct,meta/llama-3.1-8b-instruct"),
-        ("zai", "Z.AI / Zhipu (GLM)", ("MDAAR_ROUTER_ZAI_KEYS", "ZAI_API_KEY", "ZHIPU_API_KEY"), ("MDAAR_ROUTER_ZAI_MODELS",), "glm-4-flash,glm-4,glm-4-plus"),
-        ("cohere", "Cohere", ("MDAAR_ROUTER_COHERE_KEYS", "COHERE_API_KEY"), ("MDAAR_ROUTER_COHERE_MODELS",), "command-r-plus,command-r"),
-        ("cloudflare", "Cloudflare Workers AI", ("MDAAR_ROUTER_CLOUDFLARE_KEYS", "CLOUDFLARE_API_KEY"), ("MDAAR_ROUTER_CLOUDFLARE_MODELS",), "@cf/meta/llama-3.3-70b-instruct,@cf/meta/llama-3.1-8b-instruct"),
-        ("openrouter", "OpenRouter", ("MDAAR_ROUTER_OPENROUTER_KEYS", "OPENROUTER_API_KEY"), ("MDAAR_ROUTER_OPENROUTER_MODELS",), "openrouter/free"),
-        ("mistral", "Mistral AI", ("MDAAR_ROUTER_MISTRAL_KEYS", "MISTRAL_API_KEY"), ("MDAAR_ROUTER_MISTRAL_MODELS",), "mistral-small-latest,codestral-latest"),
-        ("cerebras", "Cerebras", ("MDAAR_ROUTER_CEREBRAS_KEYS", "CEREBRAS_API_KEY"), ("MDAAR_ROUTER_CEREBRAS_MODELS",), "llama-3.3-70b"),
+        ("gemini", "Gemini (Google AI Studio)", ("GEMINI_API_KEY", "MDAAR_ROUTER_GEMINI_KEYS"), ("MDAAR_ROUTER_GEMINI_MODELS",), "auto-free-chain"),
+        ("groq", "Groq", ("GROQ_API_KEY", "MDAAR_ROUTER_GROQ_KEYS"), ("MDAAR_ROUTER_GROQ_MODELS",), "llama-3.3-70b-versatile,llama-3.1-8b-instant"),
+        ("sambanova", "SambaNova Systems", ("SAMBANOVA_API_KEY", "MDAAR_ROUTER_SAMBANOVA_KEYS"), ("MDAAR_ROUTER_SAMBANOVA_MODELS",), "Meta-Llama-3.3-70B-Instruct,Meta-Llama-3.1-8B-Instruct,Qwen2.5-72B-Instruct"),
+        ("hyperbolic", "Hyperbolic", ("HYPERBOLIC_API_KEY", "MDAAR_ROUTER_HYPERBOLIC_KEYS"), ("MDAAR_ROUTER_HYPERBOLIC_MODELS",), "meta-llama/Llama-3.3-70B-Instruct,meta-llama/Meta-Llama-3.1-8B-Instruct,Qwen/Qwen2.5-Coder-32B-Instruct"),
+        ("nvidia", "NVIDIA NIM", ("NVIDIA_API_KEY", "MDAAR_ROUTER_NVIDIA_KEYS"), ("MDAAR_ROUTER_NVIDIA_MODELS",), "meta/llama-3.3-70b-instruct,meta/llama-3.1-8b-instruct"),
+        ("zai", "Z.AI / Zhipu (GLM)", ("ZAI_API_KEY", "ZHIPU_API_KEY", "MDAAR_ROUTER_ZAI_KEYS"), ("MDAAR_ROUTER_ZAI_MODELS",), "glm-4-flash,glm-4,glm-4-plus"),
+        ("cohere", "Cohere", ("COHERE_API_KEY", "MDAAR_ROUTER_COHERE_KEYS"), ("MDAAR_ROUTER_COHERE_MODELS",), "command-r-plus,command-r"),
+        ("cloudflare", "Cloudflare Workers AI", ("CLOUDFLARE_API_KEY", "MDAAR_ROUTER_CLOUDFLARE_KEYS"), ("MDAAR_ROUTER_CLOUDFLARE_MODELS",), "@cf/meta/llama-3.3-70b-instruct,@cf/meta/llama-3.1-8b-instruct"),
+        ("openrouter", "OpenRouter", ("OPENROUTER_API_KEY", "MDAAR_ROUTER_OPENROUTER_KEYS"), ("MDAAR_ROUTER_OPENROUTER_MODELS",), "openrouter/free"),
+        ("mistral", "Mistral AI", ("MISTRAL_API_KEY", "MDAAR_ROUTER_MISTRAL_KEYS"), ("MDAAR_ROUTER_MISTRAL_MODELS",), "mistral-small-latest,codestral-latest"),
+        ("cerebras", "Cerebras", ("CEREBRAS_API_KEY", "MDAAR_ROUTER_CEREBRAS_KEYS"), ("MDAAR_ROUTER_CEREBRAS_MODELS",), "llama-3.3-70b"),
     ]
 
     def __init__(
@@ -936,7 +936,7 @@ class FreeRouterConfigUI:
         wide = lambda: w.Layout(width="96%")
         indent_box = lambda: w.Layout(width="96%", margin="0 0 8px 18px")
 
-        tok_val, tok_src = resolve_setting("", ("MDAAR_ROUTER_TOKEN",), default="", return_source=True)
+        tok_val, tok_src = resolve_setting("", ("ROUTER_TOKEN", "MDAAR_ROUTER_TOKEN"), default="", return_source=True)
         self._generated_token = ""
         if not tok_val:
             self._generated_token = secrets.token_urlsafe(24)
@@ -950,13 +950,13 @@ class FreeRouterConfigUI:
             layout=wide(),
         )
         self.port = w.Text(
-            value=resolve_setting("", ("MDAAR_ROUTER_PORT",), default="8787"),
+            value=resolve_setting("", ("ROUTER_PORT", "MDAAR_ROUTER_PORT"), default="8787"),
             description="منفذ التشغيل (Port):" if self.ar else "Port:",
             style=style,
             layout=wide(),
         )
         self.cooldown = w.Text(
-            value=resolve_setting("", ("MDAAR_ROUTER_COOLDOWN",), default="45"),
+            value=resolve_setting("", ("ROUTER_COOLDOWN", "MDAAR_ROUTER_COOLDOWN"), default="45"),
             description="مهلة التهدئة 429 (ثانية):" if self.ar else "Cooldown (seconds):",
             style=style,
             layout=wide(),

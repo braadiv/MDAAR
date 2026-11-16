@@ -84,13 +84,13 @@ def test_build_authenticated_git_url_and_docs_token():
     from mdaar.orchestrator import build_authenticated_git_url, MDAARPipeline
 
     # Bitbucket SSH -> HTTPS conversion with x-token-auth
-    bb_ssh = "git@ssh.bitbucket.org:i_talent/emtiazi-docu.git"
+    bb_ssh = "git@ssh.bitbucket.org:example-org/sample-docs.git"
     auth_bb = build_authenticated_git_url(bb_ssh, "tok_123456")
-    assert auth_bb == "https://x-token-auth:tok_123456@bitbucket.org/i_talent/emtiazi-docu.git"
+    assert auth_bb == "https://x-token-auth:tok_123456@bitbucket.org/example-org/sample-docs.git"
 
     # Bitbucket with custom username (App password)
     auth_bb_user = build_authenticated_git_url(bb_ssh, "app_pass", username="myuser")
-    assert auth_bb_user == "https://myuser:app_pass@bitbucket.org/i_talent/emtiazi-docu.git"
+    assert auth_bb_user == "https://myuser:app_pass@bitbucket.org/example-org/sample-docs.git"
 
     # GitHub SSH -> HTTPS conversion with x-access-token
     gh_ssh = "git@github.com:myorg/my-docs.git"

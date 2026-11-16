@@ -141,6 +141,46 @@ print(answer)
 
 ---
 
+## 🔑 دليل المتغيرات الموحد (Single Canonical Variable Standard)
+
+لتسهيل الإعداد وتجنب أي ارتباك، تعتمد المنظومة **اسماً موحداً وواضحاً لكل وظيفة** دون تكرار أو ازدواجية، سواء عبر **Colab Secrets (🔑)** أو ملف `.env` المشترك في `/MyDrive/AI_Documentation_Workspace/.env`:
+
+### 1️⃣ إعدادات المشروع والمستودعات (Project & Repositories):
+| المتغير الموحد | الوظيفة | مثال / الافتراضي |
+|:---|:---|:---|
+| `PROJECT_NAME` | اسم المشروع الحالي | `MySystem` |
+| `GIT_SOURCE_URL` | رابط مستودع الكود المصدري | `https://github.com/org/repo.git` |
+| `SOURCE_AUTH` | طريقة مصادقة مستودع الكود | `HTTPS` أو `SSH` |
+| `GIT_DOCS_URL` | رابط مستودع التوثيق المركزي (اختياري) | `git@bitbucket.org:org/docs.git` |
+| `GIT_DOCS_ACCESS_TOKEN` | توكن رفع التوثيق للمستودع الخارجي | `glpat-...` / GitHub PAT / Bitbucket App Password |
+
+### 2️⃣ إعدادات النماذج والذكاء الاصطناعي (AI & Gateway):
+| المتغير الموحد | الوظيفة | مثال / الافتراضي |
+|:---|:---|:---|
+| `GEMINI_API_KEY` | مفاتيح Google AI Studio المباشرة | مفتاح أو مفاتيح مفصولة بفواصل |
+| `ROUTER_URL` | رابط نفق كولاب الراوتر المجاني | `https://xxxx.trycloudflare.com/v1` |
+| `ROUTER_TOKEN` | توكن أمان وحماية نفق الراوتر | التوكن المطبوع في كولاب الراوتر |
+| `ROUTER_MODEL` | اسم النموذج المطلوب من الراوتر | `auto` (تدوير ذكي مجاني عبر كافة المزودين) |
+| `HF_TOKEN` | توكن HuggingFace للنماذج المحلية | `hf_...` (اختياري) |
+| `QUANTIZATION` | نوع التكميم لكروت Colab T4 | `4bit` |
+
+### 3️⃣ مفاتيح المزودين في كولاب الراوتر (`free_router_colab.ipynb`):
+| المنصة | المتغير الموحد في Colab Secrets | النماذج المجانية الافتراضية |
+|:---|:---|:---|
+| **Google AI Studio** | `GEMINI_API_KEY` | `auto-free-chain`, `gemini-2.5-flash` |
+| **Groq Cloud** | `GROQ_API_KEY` | `llama-3.3-70b-versatile,llama-3.1-8b-instant` |
+| **SambaNova Systems** | `SAMBANOVA_API_KEY` | `Meta-Llama-3.3-70B-Instruct,Qwen2.5-72B-Instruct` |
+| **Hyperbolic** | `HYPERBOLIC_API_KEY` | `meta-llama/Llama-3.3-70B-Instruct,Qwen/Qwen2.5-Coder-32B-Instruct` |
+| **NVIDIA NIM** | `NVIDIA_API_KEY` | `meta/llama-3.3-70b-instruct,nvidia/llama-3.1-nemotron-70b-instruct` |
+| **Z.AI / Zhipu (GLM)** | `ZAI_API_KEY` | `glm-4-flash` (مجاني دائم بلا حدود) |
+| **Cohere** | `COHERE_API_KEY` | `command-r-plus,command-r` |
+| **Cloudflare Workers AI** | `CLOUDFLARE_API_KEY` + `CLOUDFLARE_ACCOUNT_ID` | `@cf/meta/llama-3.3-70b-instruct` |
+| **OpenRouter** | `OPENROUTER_API_KEY` | `openrouter/free` |
+| **Mistral AI** | `MISTRAL_API_KEY` | `mistral-small-latest,codestral-latest` |
+| **Cerebras** | `CEREBRAS_API_KEY` | `llama-3.3-70b` |
+
+---
+
 ## 🗂️ هيكلة مجلدات المشروع في Google Drive
 
 ```text
